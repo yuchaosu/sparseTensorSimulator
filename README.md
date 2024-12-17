@@ -57,7 +57,7 @@ Meshed PE Improved Mapping
     K is the number of the diagonals
     N is the original sparse matrix size
     The output will be a N*N matrix
-    Only the first column is the result.
+    The result will lie on the main diagonal.
     Compared the calculation with the original sparse matrix, current solution only need M*K PEs.
     MK:
     Upper Diagonals, Main Diagonal, Lower Diagonals
