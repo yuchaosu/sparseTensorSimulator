@@ -101,7 +101,7 @@ bool runDenseGEMMCommand(int argc, char *argv[])
     // float *output_cpu = new float[output_size]; // Used to store the CPU computed values to compare with the simulator version
    
 
-    int M = 5;  // Size of the matrix
+    M = 5;  // Size of the matrix
     int num_diagonals = 3;  // Number of diagonals
     int diagonal_index[] = {-2, 0, 2};  // Indices for diagonals (Upper, Main, Lower)
     

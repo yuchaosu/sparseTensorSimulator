@@ -141,7 +141,10 @@ void OSMeshSDMemory::cycle() {
 	   data_t data;//Accessing to memory
 	   int index_N=current_N*T_N;
 	   data = this->KN_address[(index_N+i)*this->K + this->current_K]; //Notice that in dense operation the KN matrix is actually NK 
-	   sdmemoryStats.n_SRAM_weight_reads++;  
+	   if(data == 0.0) {
+        continue;
+       }
+       sdmemoryStats.n_SRAM_weight_reads++;  
 	   DataPackage* pck_to_send = new DataPackage(sizeof(data_t), data, WEIGHT, 0, UNICAST, i);
 	   this->sendPackageToInputFifos(pck_to_send);
        }
