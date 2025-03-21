@@ -67,6 +67,15 @@ Stonne::Stonne(Config stonne_cfg) {
 	case TPU_OS_DENSE:
 	    this->mem = new  OSMeshSDMemory(0, "OSMeshSDMemory", stonne_cfg, this->outputLTConnection);
 	    break;
+	case WS_DATAFLOW:
+	    std::cout << "Creating a WSDataflow memory controller" << std::endl;
+	    this->mem = new WSDataflowMemory(0, "WSDataflowMemory", this->stonne_cfg);
+	    // Connect to appropriate networks based on your architecture
+	    
+	    // Create and configure compiler
+	    this->compiler = new CompilerWSDataflow(this->dnn_layer, 
+	                                           dynamic_cast<WSDataflowMemory*>(this->memoryController));
+	    break;
 	default:
 	    assert(false);
     }

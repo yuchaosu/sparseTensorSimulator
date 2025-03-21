@@ -6,6 +6,8 @@
 #include "utility.h"
 #include "cpptoml.h"
 
+enum mem_controller_type {OS_DATAFLOW, IS_DATAFLOW, WS_DATAFLOW};
+
 Config::Config() {
     this->reset();
 }
@@ -174,8 +176,10 @@ void Config::loadFile(std::string config_file) {
         this->m_SDMemoryCfg.mem_controller_type = get_type_memory_controller_type(*memory_controller_type_conf);
     }
 
+    if(controller_type == "WS_DATAFLOW") {
+        this->m_SDMemoryCfg.mem_controller_type = WS_DATAFLOW;
+    }
 
-   
 }
 
 void Config::reset() {
