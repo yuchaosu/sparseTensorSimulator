@@ -28,6 +28,11 @@ DiagonalSDMemory::DiagonalSDMemory(id_t id, std::string name, Config stonne_cfg,
         this->psum_fifos.push_back(psum_fifo);
     }
 
+    // Initialize statistics counters
+    this->sdmemoryStats.n_SRAM_read_ports_weights_use.resize(this->n_read_ports, 0);
+    this->sdmemoryStats.n_SRAM_read_ports_inputs_use.resize(this->n_read_ports, 0);
+    this->sdmemoryStats.n_SRAM_read_ports_psums_use.resize(this->n_read_ports, 0);
+
     // Initializing control signals
     this->execution_finished = false;
     this->configuration_done = false;
@@ -214,6 +219,15 @@ void DiagonalSDMemory::scheduleDiagonalStreams() {
             // B diagonals above main start at time K + b
             this->h_times[b] = K + b;
         }
+    }
+
+    // Initialize next_index maps for tracking injection progress
+    for(int a : this->A_offsets) {
+        this->next_index_A[a] = 0;
+    }
+
+    for(int b : this->B_offsets) {
+        this->next_index_B[b] = 0;
     }
 
     // Calculate max cycles needed for simulation
@@ -478,10 +492,20 @@ void DiagonalSDMemory::receive() {
 }
 
 void DiagonalSDMemory::send() {
+    // Check if read_connections is properly initialized
+    if(this->read_connections.empty()) {
+        return; // Skip if no connections are available
+    }
+
     // Iterating over each port and if there is data in its fifo we send it
     // We give priority to the psums
-    for(int i = 0; i < this->n_read_ports; i++) {
+    for(int i = 0; i < this->n_read_ports && i < this->read_connections.size(); i++) {
         std::vector<DataPackage*> pck_to_send;
+
+        // Check if the connection is valid
+        if(this->read_connections[i] == nullptr) {
+            continue; // Skip this iteration if connection is null
+        }
 
         if(!this->psum_fifos[i]->isEmpty()) {
             // If there is something we may send data through the connection
