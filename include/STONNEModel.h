@@ -22,6 +22,7 @@
 #include "TemporalRN.h"
 #include "OSMeshSDMemory.h"
 #include "OSMeshMN.h"
+#include "DiagonalSDMemory.h"
 #include "TileGenerator/TileGenerator.h"
 
 class Stonne {
@@ -42,13 +43,13 @@ private:
     Connection** BusMemoryConnections; //Array of output Connections between the bus and the memory. (Write output ports)
 
     //Software parameters
-    DNNLayer* dnn_layer; 
+    DNNLayer* dnn_layer;
     Tile* current_tile;
     bool layer_loaded; //Indicates if the function loadDNN
-    bool tile_loaded; 
+    bool tile_loaded;
 
     //Connection and cycle functions
-    void connectMemoryandDSN(); 
+    void connectMemoryandDSN();
     void connectMSNandDSN(); //Function to connect the multiplieers of the MSN to the last level switches in the DSN.
     void connectMSNandASN();
     void connectASNandBus(); //Connect the adders to the Collection bus
@@ -57,7 +58,7 @@ private:
     void printStats();
     void printEnergy();
     void printGlobalStats(std::ofstream& out, unsigned int indent);
-   
+
     // DEBUG PARAMETERS
     unsigned long time_ds;
     unsigned long time_ms;
@@ -70,9 +71,9 @@ private:
     void testMemory(unsigned int num_ms);
 
     //Statistics
-    unsigned int n_cycles;   
+    unsigned int n_cycles;
 
-   
+
 public:
     Stonne (Config stonne_cfg);
     ~Stonne();
@@ -85,9 +86,9 @@ public:
 
     //Load FC layer just with the appropiate parameters
     //N = batch size (i.e., number of rows in input matrix); S=number of inputs per batch (i.e., column size in input matrix and weight matrix); K=number of outputs neurons (i.e, number of rows weight matrix)
-    void loadFCLayer(std::string layer_name, unsigned int N, unsigned int S, unsigned int K, address_t input_address, address_t filter_address, address_t output_address); 
+    void loadFCLayer(std::string layer_name, unsigned int N, unsigned int S, unsigned int K, address_t input_address, address_t filter_address, address_t output_address);
 
-    //Load Sparse GEMM onto STONNE according to SIGMA parameter taxonomy. 
+    //Load Sparse GEMM onto STONNE according to SIGMA parameter taxonomy.
     void loadGEMM(std::string layer_name, unsigned int N, unsigned int K, unsigned int M, address_t MK_matrix, address_t KN_matrix, metadata_address_t MK_metadata, metadata_address_t KN_metadata, address_t output_matrix, metadata_address_t output_metadata, Dataflow dataflow);
 
     //Load Dense GEMM onto STONNE according to SIGMA parameter taxonomy and tiling according to T_N, T_K and T_M
@@ -95,6 +96,9 @@ public:
 
     //Load sparse-dense GEMM onto STONNE
     void loadSparseDense(std::string layer_name, unsigned int N, unsigned int K, unsigned int M, address_t MK_matrix, address_t KN_matrix, metadata_address_t MK_metadata_id, metadata_address_t MK_metadata_pointer, address_t output_matrix, unsigned int T_N, unsigned int T_K);
+
+    //Load diagonal dataflow GEMM onto STONNE
+    void loadDiagonalGEMM(std::string layer_name, unsigned int N, unsigned int K, unsigned int M, address_t MK_matrix, address_t KN_matrix, address_t output_matrix, const std::vector<int>& A_offsets, const std::vector<int>& B_offsets);
 
     // Generic method to load a tile
     void loadTile(unsigned int T_R, unsigned int T_S, unsigned int T_C, unsigned int T_K, unsigned int T_G, unsigned int T_N, unsigned int T_X_, unsigned int T_Y_); //Load general and CONV tile

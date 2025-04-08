@@ -15,15 +15,17 @@ public:
 };
 
 //--------------------------------------------------------------------
-// DSwitch Configuration Parameters 
+// DSwitch Configuration Parameters
 //--------------------------------------------------------------------
 class DSwitchConfig {
 public:
     //By the moment there is nothing to configure for the DSwitch
-    unsigned int latency; 
+    unsigned int latency;
     unsigned int input_ports; //Number of input_ports. By default this will be 1
     unsigned int output_ports; //Number of output ports. By default this will be 2
     unsigned int port_width; //Bit width
+    unsigned int forwarding_ports; // Number of forwarding ports
+    unsigned int buffers_capacity; // Capacity of the buffers
 
     void printConfiguration(std::ofstream& out, unsigned int indent);
 };
@@ -34,12 +36,12 @@ public:
 class MSNetworkConfig {
 public:
     MultiplierNetwork_t multiplier_network_type;
-    unsigned int ms_size; //Number of multiplier switches. 
+    unsigned int ms_size; //Number of multiplier switches.
     unsigned int ms_rows;
-    unsigned int ms_cols; 
+    unsigned int ms_cols;
 
     void printConfiguration(std::ofstream& out, unsigned int indent);
-    
+
 };
 
 //--------------------------------------------------------------------
@@ -49,9 +51,9 @@ class MSwitchConfig {
 public:
     cycles_t latency; //Latency of the MS to perform a multiplication. This number is expressed in number of cycles. //TODO To imple
     unsigned int input_ports; //Number of input ports of the MS. This number is 1 by default in MAERI
-    unsigned int output_ports; // Number of output ports of the MS. 
+    unsigned int output_ports; // Number of output ports of the MS.
     unsigned int forwarding_ports; // Number of forwarding ports of the MS. This is basically the number of elements that can be forwarded in a single cycle and in MAERI architecture is just 1.
-    unsigned int port_width; //Bit width 
+    unsigned int port_width; //Bit width
     unsigned int buffers_capacity; //Number of elements that can be stored in the MS buffers. TODO In future implementations this could be splited up, taking each buffer capacity in a different parameter.
 
     void printConfiguration(std::ofstream& out, unsigned int indent);
@@ -63,7 +65,7 @@ public:
 class ASNetworkConfig {
 public:
     ReduceNetwork_t reduce_network_type; //Type of the ReduceNetwork configured in this moment
-    unsigned int accumulation_buffer_enabled;  
+    unsigned int accumulation_buffer_enabled;
     void printConfiguration(std::ofstream& out, unsigned int indent);
 
 };
@@ -89,7 +91,7 @@ public:
 class LookUpTableConfig {
 public:
     cycles_t latency; //Latency of the LookUpTable to perform. This number must be expressed in number of cycles. 0 no supported
-    unsigned int port_width; 
+    unsigned int port_width;
 
     void printConfiguration(std::ofstream& out, unsigned int indent);
 
@@ -121,11 +123,12 @@ public:
 class Config {
 public:
     //General parameters
-    unsigned int print_stats_enabled;    //Specified whether the statistics must be printed. 
-    
+    unsigned int print_stats_enabled;    //Specified whether the statistics must be printed.
+    bool diagonal_dataflow_enabled;      //Specified whether to use diagonal dataflow
+
     //DSNetwork Configuration
     DSNetworkConfig m_DSNetworkCfg;
-    
+
     //DSwitch Configuration
     DSwitchConfig m_DSwitchCfg;
 
@@ -151,7 +154,7 @@ public:
     Config();
 
     //Load parameters from configuration file using TOML Syntax
-    void loadFile(std::string config_file);
+    bool loadFile(std::string config_file);
 
     //Reset parameters with default values
     void reset();
@@ -160,11 +163,11 @@ public:
     void printConfiguration(std::ofstream& out, unsigned int indent);
 
     //Indicates whether according to the hardware parameters, sparsity is enabled in the architecture
-    bool sparsitySupportEnabled(); 
+    bool sparsitySupportEnabled();
 
     //Indicates whether according to the hardware parameters, the operation of CONV itself is supported. Otherwise, the operation can be done
     //using GEMM operation
-    bool convOperationSupported(); 
+    bool convOperationSupported();
 };
 
 
