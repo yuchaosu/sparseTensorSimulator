@@ -1,0 +1,507 @@
+Simulation Results for Size 3x3
+==================================================
+
+--------------------------------------------------
+A_offsets: [0] (size: 1)
+B_offsets: [0] (size: 1)
+
+Matrix A:
+[8, 0, 0]
+[0, 0, 0]
+[0, 0, 1]
+
+Matrix B:
+[5, 0, 0]
+[0, 7, 0]
+[0, 0, 4]
+
+Expected Result:
+[40, 0, 0]
+[0, 0, 0]
+[0, 0, 4]
+
+Total Cycles: 3
+
+Result Diagonals:
+Offset 0: [40, 0, 4]
+
+Verification:
+✓ Results match expected output
+
+--------------------------------------------------
+A_offsets: [0] (size: 1)
+B_offsets: [-2, 0, 2] (size: 3)
+
+Matrix A:
+[2, 0, 0]
+[0, 2, 0]
+[0, 0, 2]
+
+Matrix B:
+[6, 0, 9]
+[0, 7, 0]
+[1, 0, 4]
+
+Expected Result:
+[12, 0, 18]
+[0, 14, 0]
+[2, 0, 8]
+
+Total Cycles: 7
+
+Result Diagonals:
+Offset -2: [2]
+Offset 0: [12, 14, 8]
+Offset 2: [18]
+
+Verification:
+✓ Results match expected output
+
+--------------------------------------------------
+A_offsets: [0] (size: 1)
+B_offsets: [-1, 0, 1] (size: 3)
+
+Matrix A:
+[6, 0, 0]
+[0, 2, 0]
+[0, 0, 0]
+
+Matrix B:
+[4, 0, 0]
+[7, 4, 10]
+[0, 0, 2]
+
+Expected Result:
+[24, 0, 0]
+[14, 8, 20]
+[0, 0, 0]
+
+Total Cycles: 6
+
+Result Diagonals:
+Offset -1: [14, 0]
+Offset 0: [24, 8, 0]
+Offset 1: [0, 20]
+
+Verification:
+✓ Results match expected output
+
+--------------------------------------------------
+A_offsets: [0] (size: 1)
+B_offsets: [-2, -1, 0, 1, 2] (size: 5)
+
+Matrix A:
+[3, 0, 0]
+[0, 8, 0]
+[0, 0, 4]
+
+Matrix B:
+[6, 9, 7]
+[2, 2, 6]
+[2, 9, 9]
+
+Expected Result:
+[18, 27, 21]
+[16, 16, 48]
+[8, 36, 36]
+
+Total Cycles: 9
+
+Result Diagonals:
+Offset -2: [8]
+Offset -1: [16, 36]
+Offset 0: [18, 16, 36]
+Offset 1: [27, 48]
+Offset 2: [21]
+
+Verification:
+✓ Results match expected output
+
+--------------------------------------------------
+A_offsets: [-2, 0, 2] (size: 3)
+B_offsets: [0] (size: 1)
+
+Matrix A:
+[0, 0, 3]
+[0, 2, 0]
+[4, 0, 3]
+
+Matrix B:
+[0, 0, 0]
+[0, 9, 0]
+[0, 0, 5]
+
+Expected Result:
+[0, 0, 15]
+[0, 18, 0]
+[0, 0, 15]
+
+Total Cycles: 7
+
+Result Diagonals:
+Offset -2: [0]
+Offset 0: [0, 18, 15]
+Offset 2: [15]
+
+Verification:
+✓ Results match expected output
+
+--------------------------------------------------
+A_offsets: [-2, 0, 2] (size: 3)
+B_offsets: [-2, 0, 2] (size: 3)
+
+Matrix A:
+[4, 0, 8]
+[0, 0, 0]
+[7, 0, 4]
+
+Matrix B:
+[6, 0, 2]
+[0, 8, 0]
+[9, 0, 6]
+
+Expected Result:
+[96, 0, 56]
+[0, 0, 0]
+[78, 0, 38]
+
+Total Cycles: 9
+
+Result Diagonals:
+Offset -4: []
+Offset -2: [78]
+Offset 0: [96, 0, 38]
+Offset 2: [56]
+Offset 4: []
+
+Verification:
+✓ Results match expected output
+
+--------------------------------------------------
+A_offsets: [-2, 0, 2] (size: 3)
+B_offsets: [-1, 0, 1] (size: 3)
+
+Matrix A:
+[7, 0, 7]
+[0, 6, 0]
+[0, 0, 7]
+
+Matrix B:
+[1, 1, 0]
+[4, 9, 5]
+[0, 3, 7]
+
+Expected Result:
+[7, 28, 49]
+[24, 54, 30]
+[0, 21, 49]
+
+Total Cycles: 9
+
+Result Diagonals:
+Offset -3: []
+Offset -2: [0]
+Offset -1: [24, 21]
+Offset 0: [7, 54, 49]
+Offset 1: [28, 30]
+Offset 2: [49]
+Offset 3: []
+
+Verification:
+✓ Results match expected output
+
+--------------------------------------------------
+A_offsets: [-2, 0, 2] (size: 3)
+B_offsets: [-2, -1, 0, 1, 2] (size: 5)
+
+Matrix A:
+[3, 0, 9]
+[0, 9, 0]
+[1, 0, 3]
+
+Matrix B:
+[5, 6, 4]
+[0, 3, 9]
+[3, 1, 9]
+
+Expected Result:
+[42, 27, 93]
+[0, 27, 81]
+[14, 9, 31]
+
+Total Cycles: 11
+
+Result Diagonals:
+Offset -4: []
+Offset -3: []
+Offset -2: [14]
+Offset -1: [0, 9]
+Offset 0: [42, 27, 31]
+Offset 1: [27, 81]
+Offset 2: [93]
+Offset 3: []
+Offset 4: []
+
+Verification:
+✓ Results match expected output
+
+--------------------------------------------------
+A_offsets: [-1, 0, 1] (size: 3)
+B_offsets: [0] (size: 1)
+
+Matrix A:
+[8, 3, 0]
+[2, 2, 7]
+[0, 9, 9]
+
+Matrix B:
+[1, 0, 0]
+[0, 2, 0]
+[0, 0, 9]
+
+Expected Result:
+[8, 6, 0]
+[2, 4, 63]
+[0, 18, 81]
+
+Total Cycles: 6
+
+Result Diagonals:
+Offset -1: [2, 18]
+Offset 0: [8, 4, 81]
+Offset 1: [6, 63]
+
+Verification:
+✓ Results match expected output
+
+--------------------------------------------------
+A_offsets: [-1, 0, 1] (size: 3)
+B_offsets: [-2, 0, 2] (size: 3)
+
+Matrix A:
+[10, 10, 0]
+[5, 1, 2]
+[0, 6, 6]
+
+Matrix B:
+[3, 0, 9]
+[0, 8, 0]
+[4, 0, 10]
+
+Expected Result:
+[30, 80, 90]
+[23, 8, 65]
+[24, 48, 60]
+
+Total Cycles: 8
+
+Result Diagonals:
+Offset -3: []
+Offset -2: [24]
+Offset -1: [23, 48]
+Offset 0: [30, 8, 60]
+Offset 1: [80, 65]
+Offset 2: [90]
+Offset 3: []
+
+Verification:
+✓ Results match expected output
+
+--------------------------------------------------
+A_offsets: [-1, 0, 1] (size: 3)
+B_offsets: [-1, 0, 1] (size: 3)
+
+Matrix A:
+[6, 4, 0]
+[0, 0, 0]
+[0, 0, 0]
+
+Matrix B:
+[7, 0, 0]
+[9, 2, 7]
+[0, 0, 4]
+
+Expected Result:
+[78, 8, 28]
+[0, 0, 0]
+[0, 0, 0]
+
+Total Cycles: 7
+
+Result Diagonals:
+Offset -2: [0]
+Offset -1: [0, 0]
+Offset 0: [78, 0, 0]
+Offset 1: [8, 0]
+Offset 2: [28]
+
+Verification:
+✓ Results match expected output
+
+--------------------------------------------------
+A_offsets: [-1, 0, 1] (size: 3)
+B_offsets: [-2, -1, 0, 1, 2] (size: 5)
+
+Matrix A:
+[0, 9, 0]
+[7, 7, 2]
+[0, 6, 3]
+
+Matrix B:
+[7, 0, 8]
+[9, 10, 6]
+[0, 10, 0]
+
+Expected Result:
+[81, 90, 54]
+[112, 90, 98]
+[54, 90, 36]
+
+Total Cycles: 10
+
+Result Diagonals:
+Offset -3: []
+Offset -2: [54]
+Offset -1: [112, 90]
+Offset 0: [81, 90, 36]
+Offset 1: [90, 98]
+Offset 2: [54]
+Offset 3: []
+
+Verification:
+✓ Results match expected output
+
+--------------------------------------------------
+A_offsets: [-2, -1, 0, 1, 2] (size: 5)
+B_offsets: [0] (size: 1)
+
+Matrix A:
+[3, 9, 0]
+[2, 3, 4]
+[1, 1, 0]
+
+Matrix B:
+[1, 0, 0]
+[0, 2, 0]
+[0, 0, 7]
+
+Expected Result:
+[3, 18, 0]
+[2, 6, 28]
+[1, 2, 0]
+
+Total Cycles: 9
+
+Result Diagonals:
+Offset -2: [1]
+Offset -1: [2, 2]
+Offset 0: [3, 6, 0]
+Offset 1: [18, 28]
+Offset 2: [0]
+
+Verification:
+✓ Results match expected output
+
+--------------------------------------------------
+A_offsets: [-2, -1, 0, 1, 2] (size: 5)
+B_offsets: [-2, 0, 2] (size: 3)
+
+Matrix A:
+[6, 8, 8]
+[6, 1, 4]
+[1, 5, 6]
+
+Matrix B:
+[2, 0, 7]
+[0, 1, 0]
+[3, 0, 2]
+
+Expected Result:
+[36, 8, 58]
+[24, 1, 50]
+[20, 5, 19]
+
+Total Cycles: 9
+
+Result Diagonals:
+Offset -4: []
+Offset -3: []
+Offset -2: [20]
+Offset -1: [24, 5]
+Offset 0: [36, 1, 19]
+Offset 1: [8, 50]
+Offset 2: [58]
+Offset 3: []
+Offset 4: []
+
+Verification:
+✓ Results match expected output
+
+--------------------------------------------------
+A_offsets: [-2, -1, 0, 1, 2] (size: 5)
+B_offsets: [-1, 0, 1] (size: 3)
+
+Matrix A:
+[1, 8, 0]
+[10, 10, 0]
+[1, 5, 8]
+
+Matrix B:
+[8, 8, 0]
+[4, 10, 2]
+[0, 5, 1]
+
+Expected Result:
+[40, 88, 16]
+[120, 180, 20]
+[28, 98, 18]
+
+Total Cycles: 9
+
+Result Diagonals:
+Offset -3: []
+Offset -2: [28]
+Offset -1: [120, 98]
+Offset 0: [40, 180, 18]
+Offset 1: [88, 20]
+Offset 2: [16]
+Offset 3: []
+
+Verification:
+✓ Results match expected output
+
+--------------------------------------------------
+A_offsets: [-2, -1, 0, 1, 2] (size: 5)
+B_offsets: [-2, -1, 0, 1, 2] (size: 5)
+
+Matrix A:
+[8, 1, 10]
+[9, 10, 6]
+[9, 0, 8]
+
+Matrix B:
+[8, 2, 2]
+[1, 4, 4]
+[3, 9, 3]
+
+Expected Result:
+[95, 110, 50]
+[100, 112, 76]
+[96, 90, 42]
+
+Total Cycles: 11
+
+Result Diagonals:
+Offset -4: []
+Offset -3: []
+Offset -2: [96]
+Offset -1: [100, 90]
+Offset 0: [95, 112, 42]
+Offset 1: [110, 76]
+Offset 2: [50]
+Offset 3: []
+Offset 4: []
+
+Verification:
+✓ Results match expected output
+
