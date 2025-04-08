@@ -101,12 +101,42 @@ int main(int argc, char* argv[]) {
     std::cout << "B: " << K << "x" << N << std::endl;
 
     // Define diagonal offsets for matrices A and B
-    std::vector<int> A_offsets = {0};  // Just the main diagonal
-    std::vector<int> B_offsets = {0};  // Just the main diagonal
+    std::vector<int> A_offsets = {-1, 0, 1};  // Main diagonal and adjacent diagonals
+    std::vector<int> B_offsets = {-1, 0, 1};  // Main diagonal and adjacent diagonals
 
-    // Generate matrices with non-zero values only on specified diagonals
-    float* A = generateDiagonalMatrix(M, K, A_offsets);
-    float* B = generateDiagonalMatrix(K, N, B_offsets);
+    // Create fixed matrices for testing
+    float* A = new float[M * K]();
+    float* B = new float[K * N]();
+
+    // Set values on the main diagonal (offset 0)
+    for (unsigned int i = 0; i < std::min(M, K); i++) {
+        A[i * K + i] = i + 1;  // 1, 2, 3, 4, 5 on the diagonal
+    }
+
+    // Set values on the diagonal above main (offset 1)
+    for (unsigned int i = 0; i < std::min(M, K-1); i++) {
+        A[i * K + (i+1)] = 1;  // 1's on the diagonal above main
+    }
+
+    // Set values on the diagonal below main (offset -1)
+    for (unsigned int i = 1; i < std::min(M, K); i++) {
+        A[i * K + (i-1)] = 2;  // 2's on the diagonal below main
+    }
+
+    // Set values on the main diagonal (offset 0)
+    for (unsigned int i = 0; i < std::min(K, N); i++) {
+        B[i * N + i] = i + 1;  // 1, 2, 3, 4, 5 on the diagonal
+    }
+
+    // Set values on the diagonal above main (offset 1)
+    for (unsigned int i = 0; i < std::min(K, N-1); i++) {
+        B[i * N + (i+1)] = 1;  // 1's on the diagonal above main
+    }
+
+    // Set values on the diagonal below main (offset -1)
+    for (unsigned int i = 1; i < std::min(K, N); i++) {
+        B[i * N + (i-1)] = 2;  // 2's on the diagonal below main
+    }
 
     // Print input matrices
     std::cout << "Matrix A:" << std::endl;

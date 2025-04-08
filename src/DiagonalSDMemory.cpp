@@ -128,7 +128,13 @@ void DiagonalSDMemory::setDiagonalOffsets(const std::vector<int>& A_offsets, con
 }
 
 void DiagonalSDMemory::extractDiagonalValues() {
-    // Extract diagonal values from matrices A and B
+    // Clear any existing values
+    this->A_diag_vals.clear();
+    this->B_diag_vals.clear();
+    this->next_index_A.clear();
+    this->next_index_B.clear();
+
+    // Extract diagonal values from matrix A (MK)
     for(int offset : this->A_offsets) {
         std::vector<data_t> vals;
         int start_i, end_i;
@@ -156,6 +162,7 @@ void DiagonalSDMemory::extractDiagonalValues() {
         this->next_index_A[offset] = 0; // Initialize next index to inject
     }
 
+    // Extract diagonal values from matrix B (KN)
     for(int offset : this->B_offsets) {
         std::vector<data_t> vals;
         int start_i, end_i;
@@ -181,6 +188,23 @@ void DiagonalSDMemory::extractDiagonalValues() {
 
         this->B_diag_vals[offset] = vals;
         this->next_index_B[offset] = 0; // Initialize next index to inject
+    }
+
+    // Debug output
+    std::cout << "Extracted diagonal values:" << std::endl;
+    for(int a : this->A_offsets) {
+        std::cout << "A offset " << a << ": ";
+        for(auto val : this->A_diag_vals[a]) {
+            std::cout << val << " ";
+        }
+        std::cout << std::endl;
+    }
+    for(int b : this->B_offsets) {
+        std::cout << "B offset " << b << ": ";
+        for(auto val : this->B_diag_vals[b]) {
+            std::cout << val << " ";
+        }
+        std::cout << std::endl;
     }
 }
 
