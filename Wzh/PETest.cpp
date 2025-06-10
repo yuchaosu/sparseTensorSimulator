@@ -1,40 +1,130 @@
-#include <iostream>
 #include "PE.h"
+#include "connection.h"
+#include "utility.h"
+#include <iostream>
+#include <cassert>
 
-void test_case(const DataPackage& top, const DataPackage& left) {
-    PE pe;
-    pe.load_inputs(top, left);
-    pe.compute();
+void reset(Connection& top, Connection& left, Connection& bottom, Connection& right) {
+    // Does nothing here — connections reset themselves per send()
+    // Provided for symmetry and extensibility
+}
 
-    std::cout << "Top input: " << top << std::endl;
-    std::cout << "Left input: " << left << std::endl;
+void runCycleAndPrint(PE& pe, int cycles = 2) {
+    for (int i = 0; i < cycles; ++i) {
+        std::cout << ">>> Cycle " << i << "\n";
+        pe.cycle();
+    }
+}
 
-    std::cout << "Bottom output (psum): ";
-    if (pe.bottom_out) std::cout << *pe.bottom_out << std::endl;
-    else std::cout << "None" << std::endl;
+void testCase_MatchIndices() {
+    std::cout << "\n[TEST] A.index2 == B.index1 (Expect Multiply)\n";
 
-    std::cout << "Forward Top: ";
-    if (pe.forward_top) std::cout << *pe.forward_top << std::endl;
-    else std::cout << "None" << std::endl;
+    Connection top, left, bottom, right;
+    PE pe(0, 0);
+    pe.setTopConnection(&top);
+    pe.setLeftConnection(&left);
+    pe.setBottomConnection(&bottom);
+    pe.setRightConnection(&right);
 
-    std::cout << "Forward Left: ";
-    if (pe.forward_left) std::cout << *pe.forward_left << std::endl;
-    else std::cout << "None" << std::endl;
+    // Matching: 3 == 3
+    DataPackage A(2.0, 1, 3); // from top
+    DataPackage B(4.0, 3, 5); // from left
 
-    std::cout << "-----------------------------" << std::endl;
+    top.receiveSrc(A);
+    left.receiveSrc(B);
+
+    runCycleAndPrint(pe);
+    assert(bottom.pendingPsum());
+    auto psum = bottom.sendPsum();
+    assert(psum.value == 8.0 && psum.index1 == 1 && psum.index2 == 5);
+    std::cout << "✅ Passed match index test\n";
+}
+
+void testCase_Aindex2LessThanBindex1() {
+    std::cout << "\n[TEST] A.index2 < B.index1 (Expect sendBottom, drop A)\n";
+
+    Connection top, left, bottom, right;
+    PE pe(0, 1);
+    pe.setTopConnection(&top);
+    pe.setLeftConnection(&left);
+    pe.setBottomConnection(&bottom);
+    pe.setRightConnection(&right);
+
+    DataPackage A(1.0, 0, 2);  // index2 = 2
+    DataPackage B(5.0, 3, 6);  // index1 = 3
+
+    top.receiveSrc(A);
+    left.receiveSrc(B);
+
+    runCycleAndPrint(pe);
+    assert(!bottom.pendingPsum());
+    std::cout << "✅ Passed A < B index test\n";
+}
+
+void testCase_Aindex2GreaterThanBindex1() {
+    std::cout << "\n[TEST] A.index2 > B.index1 (Expect sendRight, drop B)\n";
+
+    Connection top, left, bottom, right;
+    PE pe(1, 0);
+    pe.setTopConnection(&top);
+    pe.setLeftConnection(&left);
+    pe.setBottomConnection(&bottom);
+    pe.setRightConnection(&right);
+
+    DataPackage A(3.0, 1, 5); // index2 = 5
+    DataPackage B(2.0, 3, 1); // index1 = 3
+
+    top.receiveSrc(A);
+    left.receiveSrc(B);
+
+    runCycleAndPrint(pe);
+    assert(!bottom.pendingPsum());
+    std::cout << "✅ Passed A > B index test\n";
+}
+
+void testCase_OnlyA() {
+    std::cout << "\n[TEST] Only A received (Expect forward A)\n";
+
+    Connection top, left, bottom, right;
+    PE pe(0, 0);
+    pe.setTopConnection(&top);
+    pe.setLeftConnection(&left);
+    pe.setBottomConnection(&bottom);
+    pe.setRightConnection(&right);
+
+    DataPackage A(9.0, 2, 4);
+
+    top.receiveSrc(A);
+
+    runCycleAndPrint(pe);
+    std::cout << "✅ Passed only A test\n";
+}
+
+void testCase_OnlyB() {
+    std::cout << "\n[TEST] Only B received (Expect forward B)\n";
+
+    Connection top, left, bottom, right;
+    PE pe(0, 0);
+    pe.setTopConnection(&top);
+    pe.setLeftConnection(&left);
+    pe.setBottomConnection(&bottom);
+    pe.setRightConnection(&right);
+
+    DataPackage B(6.0, 4, 7);
+
+    left.receiveSrc(B);
+
+    runCycleAndPrint(pe);
+    std::cout << "✅ Passed only B test\n";
 }
 
 int main() {
-    std::cout << "=== Mock Test for PE ===" << std::endl;
+    testCase_MatchIndices();
+    testCase_Aindex2LessThanBindex1();
+    testCase_Aindex2GreaterThanBindex1();
+    testCase_OnlyA();
+    testCase_OnlyB();
 
-    // Case 1: Matching indices → multiplication
-    test_case({5, 0, 2}, {3, 2, 1});
-
-    // Case 2: top.index2 < left.index1 → forward top
-    test_case({5, 0, 1}, {3, 2, 1});
-
-    // Case 3: top.index2 > left.index1 → forward left
-    test_case({5, 0, 3}, {3, 2, 1});
-
+    std::cout << "\n✅✅ All PE test cases passed successfully.\n";
     return 0;
 }

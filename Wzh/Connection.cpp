@@ -1,0 +1,135 @@
+//Created 13/06/2019
+
+#include "connection.h"
+#include <iostream>
+#include <assert.h>
+
+using namespace std;
+
+Connection::Connection() {
+    this->pending_src = false;
+    this->pending_psum = false;
+    this->pending_transfer = false;
+    sends = 0;
+    receives = 0;
+}
+
+
+
+//Send a package to the interconnection. If there is no remaining bandiwth an exception is raised
+void Connection::send() {
+    this->src = src;
+    this->psum = psum;
+    this->transfer = transfer;
+    this->pending_src = false;
+    this->pending_psum = false;
+    this->pending_transfer = false;
+
+    return;
+}
+
+//Return the packages from the interconnection
+void Connection::receive(DataPackage src, DataPackage psum, DataPackage transfer) {
+    assert(!this->pending_src && "Connection already has pending src data. Cannot receive new data until the previous is sent."); 
+    this->src = src;
+    this->pending_src = true;
+    assert(!this->pending_psum && "Connection already has pending psum data. Cannot receive new data until the previous is sent.");
+    this->psum = psum;
+    this->pending_psum = true;
+    assert(!this->pending_transfer && "Connection already has pending transfer data. Cannot receive new data until the previous is sent.");
+    this->transfer = transfer;
+    this->pending_transfer = true;
+}
+
+void Connection::receiveSrc(DataPackage src) {
+    assert(!this->is_delayed_src && "Already has buffered src data.");
+    this->delayed_src = src;
+    this->is_delayed_src = true;
+    receives++;
+}
+void Connection::receivePsum(DataPackage psum) {
+    assert(!this->is_delayed_psum && "Already has buffered psum data.");
+    this->delayed_psum = psum;
+    this->is_delayed_psum = true;
+    receives++;
+}
+
+void Connection::receiveTransfer(DataPackage transfer) {
+    assert(!this->is_delayed_transfer && "Already has buffered transfer data.");
+    this->delayed_transfer = transfer;
+    this->is_delayed_transfer = true;
+    receives++;
+}
+
+DataPackage Connection::sendSrc() {
+    if (this->pending_src) {
+        this->sends++;
+        this->pending_src = false;
+        return this->src;
+    }
+    else {
+        assert(false && "No pending src data to send.");
+        return DataPackage();  // Return an empty package if no pending data
+    }
+}
+
+DataPackage Connection::sendPsum() {
+    if (this->pending_psum) {
+        this->sends++;
+        this->pending_psum = false;
+        return this->psum;
+    }
+    else {
+        assert(false && "No pending psum data to send.");
+        return DataPackage();  // Return an empty package if no pending data
+    }
+}
+
+DataPackage Connection::sendTransfer() {
+    if (this->pending_transfer) {
+        this->sends++;
+        this->pending_transfer = false;
+        return this->transfer;
+    }
+    else {
+        assert(false && "No pending transfer data to send.");
+        return DataPackage();  // Return an empty package if no pending data
+    }
+}
+
+bool Connection::pendingSrc() {
+    return pending_src;
+}
+
+bool Connection::pendingPsum() {
+    return pending_psum;
+}
+
+bool Connection::pendingTransfer() {
+    return pending_transfer;
+}
+
+void Connection::printEnergy() {
+    printf("Connection: sends=%zu, receives=%zu\n", sends, receives);
+}
+
+void Connection::cycle() {
+    if (is_delayed_src) {
+        src = delayed_src;
+        pending_src = true;
+        is_delayed_src = false;
+    }
+    if (is_delayed_psum) {
+        psum = delayed_psum;
+        pending_psum = true;
+        is_delayed_psum = false;
+    }
+    if (is_delayed_transfer) {
+        transfer = delayed_transfer;
+        pending_transfer = true;
+        is_delayed_transfer = false;
+    }
+}
+
+
+
