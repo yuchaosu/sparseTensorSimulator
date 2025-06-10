@@ -25,13 +25,6 @@ private:
     size_t sends; // Number of sends
     size_t receives; // Number of receives
 
-    DataPackage delayed_src;   // Used to store the src package that is sent in the next cycle
-    DataPackage delayed_psum;  // Used to store the psum package that is sent in the next cycle
-    DataPackage delayed_transfer;  // Used to store the transfer package that is sent in the next cycle
-
-    bool is_delayed_src = false;   // Indicates if the src package is delayed
-    bool is_delayed_psum = false;  // Indicates if the psum package is delayed
-    bool is_delayed_transfer = false;  // Indicates if the transfer package is delayed
 public:
     Connection();
     void send(); //Package of data to be send. The sum of all the size_package of each package must not be greater than bw.
@@ -49,7 +42,6 @@ public:
     bool pendingTransfer();
     void printEnergy();
 
-    void cycle();  // Cycle the connection, sending delayed packages if any
 };
 
 

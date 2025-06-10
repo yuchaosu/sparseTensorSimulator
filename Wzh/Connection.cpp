@@ -42,22 +42,25 @@ void Connection::receive(DataPackage src, DataPackage psum, DataPackage transfer
 }
 
 void Connection::receiveSrc(DataPackage src) {
-    assert(!this->is_delayed_src && "Already has buffered src data.");
-    this->delayed_src = src;
-    this->is_delayed_src = true;
+    assert(!this->pending_src && "Already has buffered src data.");
+    this->src = src;
+    this->pending_src = true;
+    printf("Connection: received src data: %f, index1: %d, index2: %d\n", src.value, src.index1, src.index2);
     receives++;
 }
 void Connection::receivePsum(DataPackage psum) {
-    assert(!this->is_delayed_psum && "Already has buffered psum data.");
-    this->delayed_psum = psum;
-    this->is_delayed_psum = true;
+    assert(!this->pending_psum && "Already has buffered psum data.");
+    this->psum = psum;
+    this->pending_psum = true;
+    printf("Connection: received psum data: %f, index1: %d, index2: %d\n", psum.value, psum.index1, psum.index2);
     receives++;
 }
 
 void Connection::receiveTransfer(DataPackage transfer) {
-    assert(!this->is_delayed_transfer && "Already has buffered transfer data.");
-    this->delayed_transfer = transfer;
-    this->is_delayed_transfer = true;
+    assert(!this->pending_transfer && "Already has buffered transfer data.");
+    this->transfer = transfer;
+    this->pending_transfer = true;
+    printf("Connection: received transfer data: %f, index1: %d, index2: %d\n", transfer.value, transfer.index1, transfer.index2);
     receives++;
 }
 
@@ -113,23 +116,6 @@ void Connection::printEnergy() {
     printf("Connection: sends=%zu, receives=%zu\n", sends, receives);
 }
 
-void Connection::cycle() {
-    if (is_delayed_src) {
-        src = delayed_src;
-        pending_src = true;
-        is_delayed_src = false;
-    }
-    if (is_delayed_psum) {
-        psum = delayed_psum;
-        pending_psum = true;
-        is_delayed_psum = false;
-    }
-    if (is_delayed_transfer) {
-        transfer = delayed_transfer;
-        pending_transfer = true;
-        is_delayed_transfer = false;
-    }
-}
 
 
 

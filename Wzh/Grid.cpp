@@ -56,9 +56,6 @@ void Grid::setOutputConnections(std::vector<Connection*> output_connections) {
 }
 
 void Grid::cycle() {
-    for(auto& conn : connections) {
-        conn->cycle();
-    }
     for (int i = 0; i < rows; ++i)
         for (int j = 0; j < cols; ++j)
             pes[i][j]->cycle();
