@@ -152,16 +152,16 @@ std::string get_string_fwlink_direction(fl_t fl_direction) {
             return "NOT_CONFIGURED";
             break;
 
-        default: 
+        default:
              assert(false);
     }
 
- 
+
 }
 
 std::string get_string_reduce_network_type(ReduceNetwork_t reduce_network_type) {
     switch(reduce_network_type) {
-        case ASNETWORK: 
+        case ASNETWORK:
             return "ASNETWORK";
             break;
         case FENETWORK:
@@ -191,12 +191,12 @@ ReduceNetwork_t get_type_reduce_network_type(std::string reduce_network_type) {
             std::cout << reduce_network_type << " Not found" << std::endl;
             assert(false);
         }
- 
+
 }
 
 std::string get_string_multiplier_network_type(MultiplierNetwork_t multiplier_network_type) {
     switch(multiplier_network_type) {
-        case LINEAR: 
+        case LINEAR:
             return "LINEAR";
             break;
         case OS_MESH:
@@ -220,7 +220,7 @@ MultiplierNetwork_t get_type_multiplier_network_type(std::string multiplier_netw
             std::cout << multiplier_network_type << " Not found" << std::endl;
             assert(false);
         }
- 
+
 }
 
 std::string get_string_memory_controller_type(MemoryController_t memory_controller_type) {
@@ -235,7 +235,7 @@ std::string get_string_memory_controller_type(MemoryController_t memory_controll
 	case MAGMA_SPARSE_DENSE:
 	    return "MAGMA_SPARSE_DENSE";
 	    break;
-	
+
 	case TPU_OS_DENSE:
 	    return "TPU_OS_DENSE";
 	    break;
@@ -283,7 +283,10 @@ Dataflow get_type_dataflow_type(std::string dataflow_type) {
 	else if(dataflow_type=="SPARSE_DENSE_DATAFLOW") {
 	    return SPARSE_DENSE_DATAFLOW;
 	}
-	
+	else if(dataflow_type=="DIAGONAL_DATAFLOW") {
+	    return DIAGONAL_DATAFLOW;
+	}
+
         else {
             std::cout << dataflow_type << " Not found" << std::endl;
             assert(false);
@@ -306,6 +309,9 @@ std::string get_string_dataflow_type(Dataflow dataflow) {
 	/////
 	case SPARSE_DENSE_DATAFLOW:
 	    return "SPARSE_DENSE_DATAFLOW";
+	    break;
+	case DIAGONAL_DATAFLOW:
+	    return "DIAGONAL_DATAFLOW";
 	    break;
         default:
             assert(false);
@@ -343,11 +349,11 @@ float* generatePrunnedMatrix(const float* src_matrix, unsigned int size, float p
     float* begin = dst_matrix;
     float* end = begin + size;
     float* nth = begin + n;
-    std::nth_element(begin, nth, end); //Sorting 
+    std::nth_element(begin, nth, end); //Sorting
     float pivot = dst_matrix[n];
     //Copying and prunning
     for(int i=0; i<size; i++) {
-        float value_abs = fabs(src_matrix[i]); 
+        float value_abs = fabs(src_matrix[i]);
 	if(value_abs < pivot) {
             dst_matrix[i]=0.0; //Prunned
 	}
@@ -388,7 +394,7 @@ unsigned int* generateBitMapFromDense(float* denseMatrix, unsigned int rows, uns
         for(int i=0; i<rows; i++) {
 	    non_zeros=0;
             for(int j=0; j<cols; j++) {
-                if(denseMatrix[i*cols+j] != 0.0) { 
+                if(denseMatrix[i*cols+j] != 0.0) {
                     bitMap[i*cols+j]=1;
 		    non_zeros++;
 	        }
@@ -443,7 +449,7 @@ unsigned int* generateBitMapFromDense(float* denseMatrix, unsigned int rows, uns
 
     return bitMap;
 
-}	
+}
 
 /////
 float* generateMatrixSparseFromDenseNoBitmap(float* denseMatrix, unsigned int rows, unsigned int cols, GENERATION_TYPE gen_type) {
@@ -474,7 +480,7 @@ float* generateMatrixSparseFromDenseNoBitmap(float* denseMatrix, unsigned int ro
 		if(non_zeros==0)
                 	elements.push_back(0.0);
             }
-	}	
+	}
 
 	float* sparseMatrix = new float[elements.size()];
 	for(int i=0; i<elements.size(); i++) {
@@ -544,7 +550,7 @@ int* generateMinorIDFromDense(float* denseMatrix, unsigned int rows, unsigned in
 		if(non_zeros==0)
 			elements.push_back(0);
             }
-	}	
+	}
 
 	int* minor_id = new int[elements.size()];
 	nnz=elements.size();
@@ -576,7 +582,7 @@ int* generateMinorIDFromDense(float* denseMatrix, unsigned int rows, unsigned in
 //		    }
 //		}
 //            }
-//	}	
+//	}
 
 //	int* minor_id = new int[elements.size()];
 //	for(int i=0; i<elements.size(); i++) {
@@ -611,7 +617,7 @@ int* generateMajorPointerFromDense(float* denseMatrix, unsigned int rows, unsign
                 	nnzp++;
                 }
 	    }
-	   elements.push_back(nnzp); 
+	   elements.push_back(nnzp);
 	}
 
         else { //In columns order (KN)			//we need col_ptr
@@ -635,7 +641,7 @@ int* generateMajorPointerFromDense(float* denseMatrix, unsigned int rows, unsign
                 }
             }
             elements.push_back(nnzp);
-	}	
+	}
 
 	int* major_pointer = new int[elements.size()];
 	for(int i=0; i<elements.size(); i++) {
@@ -715,7 +721,7 @@ void organizeMatrix (float* matrix, unsigned int rows, unsigned int cols, unsign
         }
     }
 
-     
+
 
     delete[] matrix_copy;
 }
@@ -757,7 +763,7 @@ unsigned int* calculateOrdering (float* matrix, unsigned int rows, unsigned int 
     if(gen_type==GEN_BY_ROWS) {
         pointer_table = new unsigned int[rows];
         size_rows = new unsigned int [rows];
-    
+
         for(int i=0; i<rows; i++) {
            pointer_table[i]=i;
            size_rows[i] = 0;
@@ -772,7 +778,7 @@ unsigned int* calculateOrdering (float* matrix, unsigned int rows, unsigned int 
     else {
         pointer_table = new unsigned int[cols];
         size_rows = new unsigned int [cols];
-    
+
         for(int j=0; j<cols; j++) {
            pointer_table[j]=j;
            size_rows[j] = 0;
@@ -868,8 +874,8 @@ unsigned int* calculateOrdering (float* matrix, unsigned int rows, unsigned int 
         dim_table = cols;
     }
     unsigned int n_rows_selected = 0;
-  
-    //First the ones that does not fit 
+
+    //First the ones that does not fit
     for(int i=0; i<dim_table; i++) {
         if(size_rows[i] > num_ms) {
             int temp = size_rows[i];
@@ -883,7 +889,7 @@ unsigned int* calculateOrdering (float* matrix, unsigned int rows, unsigned int 
     }
     unsigned int n_ms_used = 0;
     bool row_found;
-    unsigned int greater_row; 
+    unsigned int greater_row;
     while(n_rows_selected < dim_table) {
         row_found = false;
 	for(int i=n_rows_selected; i < dim_table; i++) {
@@ -893,7 +899,7 @@ unsigned int* calculateOrdering (float* matrix, unsigned int rows, unsigned int 
                     greater_row = i;
 		}
 
-		else { //If it is true 
+		else { //If it is true
                     if(size_rows[i] > size_rows[greater_row]) {
                         greater_row = i;
 		    }
@@ -916,7 +922,7 @@ unsigned int* calculateOrdering (float* matrix, unsigned int rows, unsigned int 
 	}
 
 	else {
-            n_ms_used = 0; 
+            n_ms_used = 0;
 	}
     }
 

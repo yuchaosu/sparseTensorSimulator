@@ -24,10 +24,13 @@ OBJS = $(patsubst src/%, $(OBJSDIR)/%, $(patsubst %.cpp,%.o,$(SOURCE)))
 
 
 
-all: $(BIN)
+all: $(BIN) diagonal_test
 
 $(BIN): $(OBJSDIR) $(OBJS)
 	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS)  -o $@ $(OBJS)  #-pthread -ltcmalloc
+
+diagonal_test: $(OBJSDIR) $(filter-out $(OBJSDIR)/main.o, $(OBJS)) $(OBJSDIR)/diagonal_test.o
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $@ $(filter-out $(OBJSDIR)/main.o $(OBJSDIR)/diagonal_test.o, $(OBJS)) $(OBJSDIR)/diagonal_test.o
 
 $(OBJSDIR):
 	mkdir -p $@ && \
@@ -41,6 +44,6 @@ $(OBJSDIR)/%.o: src/%.cpp $(INCLUDES)
 
 .PHONY: clean
 clean:
-	rm -rf $(OBJSDIR) && rm stonne
+	rm -rf $(OBJSDIR) && rm -f stonne diagonal_test
 
 
