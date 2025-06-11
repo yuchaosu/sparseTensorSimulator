@@ -1,4 +1,4 @@
-#include "PE.h"
+#include "../include/PE.h"
 
 PE::PE(int row, int col) : r(row), c(col) {
     connection_top = nullptr;
@@ -109,7 +109,12 @@ void PE::receive() {
     
 }
 void PE::cycle() {
-    receive();
+    idle = true; // Reset idle state at the start of the cycle
+
+    if (!receivedA.isEmpty() || !receivedB.isEmpty() || !Psum.isEmpty() || !PsumOut.isEmpty()) {
+        idle = false; // If there is any data to process, the PE is not idle
+    }
+
     if (!receivedA.isEmpty() && !receivedB.isEmpty()) {
         DataPackage valueA = receivedA.front();
         DataPackage valueB = receivedB.front();
@@ -141,8 +146,13 @@ void PE::cycle() {
         sendBottom();
         receivedA.pop();
     }
+
     sendPsum();
     sendTransfer();
+    receive(); // Receive new data for the next cycle
+    
+
+
 }
 
 Connection* PE::getBottomConnection() {
@@ -151,4 +161,12 @@ Connection* PE::getBottomConnection() {
 
 Connection* PE::getRightConnection() {
     return connection_right;
+}
+
+bool PE::isIdle() const {
+    return idle;
+}
+
+void PE::setIdle(bool idle) {
+    this->idle = idle;
 }

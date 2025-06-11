@@ -1,4 +1,4 @@
-#include "TreeReducer.h"
+#include "../include/TreeReducer.h"
 #include <iostream>
 
 void TreeReducer::cycle() {
@@ -19,4 +19,13 @@ void TreeReducer::printResults() const {
         auto [i, j] = entry.first;
         std::cout << "C[" << i << "][" << j << "] = " << entry.second << std::endl;
     }
+}
+
+std::map<int, std::vector<std::tuple<double, int, int>>> TreeReducer::getResults() const {
+    std::map<int, std::vector<std::tuple<double, int, int>>> results;
+    for (const auto& entry : psumOut) {
+        auto [i, j] = entry.first;
+        results[j - i].emplace_back(entry.second, i, j);
+    }
+    return results;
 }

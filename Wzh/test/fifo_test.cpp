@@ -1,10 +1,10 @@
 #include <iostream>
-#include "fifo.h"
-#include "Utility.h"
+#include "../include/Fifo.h"
+#include "../include/Utility.h"
 
 void test_basic_operations() {
     std::cout << "\n[TEST] Basic FIFO operations\n";
-    FIFO<DataPackage> fifo(2);
+    FIFO<DataPackage> fifo();
 
     DataPackage d1(10, 0, 0);
     DataPackage d2(20, 1, 1);
@@ -23,7 +23,7 @@ void test_basic_operations() {
 
 void test_overflow() {
     std::cout << "\n[TEST] FIFO overflow\n";
-    FIFO<DataPackage> fifo(1);
+    FIFO<DataPackage> fifo();
 
     try {
         fifo.push(DataPackage(1, 0, 0));

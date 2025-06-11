@@ -8,7 +8,8 @@
 class TreeReducer {
 private:
     std::vector<Connection*> bottomPorts;
-    std::map<std::pair<int, int>, int> psumOut;
+    std::map<std::pair<int, int>, double> psumOut;
+    std::map<int, std::vector<std::tuple<double, int, int>>> diagonals;
 
 public:
     TreeReducer(const std::vector<Connection*>& ports) : bottomPorts(ports) {}
@@ -16,7 +17,7 @@ public:
     void cycle();  // collect one cycle worth of data
 
     void printResults() const;
-    std::map<std::pair<int, int>, int> getResults() const { return psumOut; }
+    std::map<int, std::vector<std::tuple<double, int, int>>> getResults() const;
 };
 
 #endif

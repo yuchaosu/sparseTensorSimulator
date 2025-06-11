@@ -1,4 +1,4 @@
-#include "Grid.h"
+#include "../include/Grid.h"
 #include <cassert>
 #include <iostream>
 
@@ -56,11 +56,22 @@ void Grid::setOutputConnections(std::vector<Connection*> output_connections) {
 }
 
 void Grid::cycle() {
-    for (int i = 0; i < rows; ++i)
-        for (int j = 0; j < cols; ++j)
+    for (int i = 0; i < rows; ++i){
+        for (int j = 0; j < cols; ++j) {
             pes[i][j]->cycle();
+        }
+    }
 }
 
 PE* Grid::getPE(int row, int col) const {
     return pes[row][col];
+}
+
+bool Grid::isIdle() const {
+    for (const auto& row : pes) {
+        for (const auto& pe : row) {
+            if (!pe->isIdle()) return false;
+        }
+    }
+    return true;
 }

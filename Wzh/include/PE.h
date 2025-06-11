@@ -28,16 +28,27 @@ public:
 
     void cycle();
 
+    bool isIdle() const;
+    void setIdle(bool idle);
+
+
     Connection* getBottomConnection();
     Connection* getRightConnection();
-    FIFO<DataPackage> receivedA, receivedB, receivedPsum, Psum, forwardA, forwardB, PsumOut;
+    FIFO<DataPackage> receivedA; //Received data from the top connection
+    FIFO<DataPackage> receivedB; //Received data from the left connection
+    FIFO<DataPackage> receivedPsum; //Received partial sums from other PEs
+    FIFO<DataPackage> Psum; //Current partial sum
+    FIFO<DataPackage> receivedTransfer; //Received transferred partial sums
+    FIFO<DataPackage> PsumOut; //Output partial sum, combination of Psum and receivedTransfer
 
-    FIFO<DataPackage> receivedTransfer;
     int r,c;
     Connection* connection_top;
     Connection* connection_bottom;
     Connection* connection_left;
     Connection* connection_right;
+
+    private:
+    bool idle = true; // Indicates if the PE is idle
 };
 
 #endif // PE_H
