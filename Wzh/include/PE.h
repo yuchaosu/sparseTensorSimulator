@@ -9,7 +9,7 @@
 
 class PE {
 public:
-    PE(int row = 0, int col = 0);
+    PE(int row = 0, int col = 0, std::ostream& output_stream = std::cout);
 
     void receive();
     void send();
@@ -49,6 +49,7 @@ public:
 
     private:
     bool idle = true; // Indicates if the PE is idle
+    std::ostream& out;
 };
 
 #endif // PE_H

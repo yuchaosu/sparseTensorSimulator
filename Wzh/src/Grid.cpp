@@ -2,12 +2,12 @@
 #include <cassert>
 #include <iostream>
 
-Grid::Grid(int rows, int cols) : rows(rows), cols(cols) {
+Grid::Grid(int rows, int cols, std::ostream& output_stream) : rows(rows), cols(cols), out(output_stream) {
     pes.resize(rows, std::vector<PE*>(cols, nullptr));
 
     for (int i = 0; i < rows; ++i)
         for (int j = 0; j < cols; ++j)
-            pes[i][j] = new PE(i, j);
+            pes[i][j] = new PE(i, j, out);
 
     connectNeighbors();  // << delegate neighbor wiring here
 }

@@ -7,7 +7,7 @@
 
 class Grid {
 public:
-    Grid(int rows, int cols);
+    Grid(int rows, int cols, std::ostream& out);
     ~Grid();
 
     void setInputConnections(std::vector<Connection*> top_connections, 
@@ -25,6 +25,7 @@ private:
     std::vector<std::vector<PE*>> pes;
     std::vector<Connection*> connections;  // Store all connections for cycling
     void connectNeighbors();  // << New helper function
+    std::ostream& out;
     //bool idle = false; // Indicates if the grid is idle
 };
 
