@@ -11,8 +11,6 @@
 #include <sstream>
 #include <algorithm>
 
-namespace fs = std::filesystem;
-
 // Random number generator
 
 
