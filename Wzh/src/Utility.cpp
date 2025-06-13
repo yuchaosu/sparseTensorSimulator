@@ -78,30 +78,42 @@ std::vector<std::vector<int>> generate_symmetric_offsets(int range_size) {
 }
 
 // Extract diagonals
-std::unordered_map<int, std::vector<double>> extract_diagonals(const std::vector<std::vector<double>>& matrix, const std::vector<int>& offsets) {
+std::unordered_map<int, std::vector<std::tuple<double, int, int>>> 
+extract_diagonals(const std::vector<std::vector<double>>& matrix, const std::vector<int>& offsets) {
     int size = matrix.size();
-    std::unordered_map<int, std::vector<double>> diagonals;
+    std::unordered_map<int, std::vector<std::tuple<double, int, int>>> diagonals;
+
     for (int offset : offsets) {
-        std::vector<double> diag;
+        std::vector<std::tuple<double, int, int>> diag;
         if (offset >= 0) {
-            for (int i = 0; i < size - offset; i++) {
-                diag.push_back(matrix[i][i + offset]);
+            for (int i = 0; i < size - offset; ++i) {
+                int row = i;
+                int col = i + offset;
+                diag.emplace_back(matrix[row][col], row, col);
             }
         } else {
-            for (int i = -offset; i < size; i++) {
-                diag.push_back(matrix[i][i + offset]);
+            for (int i = -offset; i < size; ++i) {
+                int row = i;
+                int col = i + offset;
+                diag.emplace_back(matrix[row][col], row, col);
             }
         }
-        diagonals[offset] = diag;
+        diagonals[offset] = std::move(diag);
     }
+
     return diagonals;
 }
 
+
 // Compute result diagonals from two sets of diagonals
-std::vector<int> computeResultDiagonals(const std::vector<int>& A_diags, const std::vector<int>& B_diags) {
+std::vector<int> computeResultDiagonals(const std::vector<int>& A_diags, const std::vector<int>& B_diags, int size) {
     std::set<int> result_set;
     for (int da : A_diags) {
         for (int db : B_diags) {
+            if (std::abs(da + db) >= size) {
+                // Skip if the resulting diagonal is out of bounds
+                continue;
+            }
             result_set.insert(da + db);
         }
     }
@@ -145,26 +157,22 @@ void print_matrix(const std::vector<std::vector<double>>& matrix, std::ofstream&
     }
 }
 
-std::vector<std::vector<DataPackage>> buildDatapackage(std::unordered_map<int, std::vector<double>>& diagonals) {
+std::vector<std::vector<DataPackage>> buildDatapackage(std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals) {
     std::vector<std::vector<DataPackage>> result;
     for (const auto& [offset, vals] : diagonals) {
         std::vector<DataPackage> packages;
-        for (int i = 0; i < vals.size(); ++i) {
-            if(offset >= 0) {
-                packages.emplace_back(vals[i], i, i + offset);
-            } else {
-                packages.emplace_back(vals[i], i - offset, i);
-            }
-
+        for (const auto& [val, i, j] : vals) {
+            packages.emplace_back(val, i, j);
         }
         result.emplace_back(packages);
     }
     std::sort(result.begin(), result.end(), [](const std::vector<DataPackage>& a, const std::vector<DataPackage>& b) {
         if (a.empty() || b.empty()) return a.size() < b.size();
-        return (a[0].index2 - a[0].index1) < (b[0].index2 - b[0].index1); // Sort by the width of the first DataPackage
+        return (a[0].index2 - a[0].index1) < (b[0].index2 - b[0].index1);
     });
     return result;
 }
+
 
 int countMatrixMismatches(const std::vector<std::vector<double>>& ref,
                            const std::vector<std::vector<double>>& sim,
@@ -299,15 +307,16 @@ split_diagonals_by_group(const std::unordered_map<int, std::vector<double>>& dia
 }
 
 std::pair<
-    std::map<int, std::map<int, std::unordered_map<int, std::vector<double>>>>,
-    std::map<int, std::map<int, std::unordered_map<int, std::vector<double>>>>>
+    std::map<int, std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>>,
+    std::map<int, std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>>
+>
 split_double_diagonals_by_group(
-    const std::unordered_map<int, std::vector<double>>& diagonals_A,
-    const std::unordered_map<int, std::vector<double>>& diagonals_B,
+    const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals_A,
+    const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals_B,
     int num_groups,
     int diagonal_group_A,
-    int diagonal_group_B) {
-
+    int diagonal_group_B) 
+{
     if (diagonals_A.find(0) == diagonals_A.end() || diagonals_B.find(0) == diagonals_B.end()) {
         throw std::invalid_argument("Main diagonal (offset 0) must exist in both A and B.");
     }
@@ -327,7 +336,8 @@ split_double_diagonals_by_group(
         throw std::invalid_argument("Diagonal group count cannot exceed number of diagonals.");
     }
 
-    auto partition_offsets = [](const std::unordered_map<int, std::vector<double>>& diags, int d_groups) {
+    // Helper updated for vector<tuple<double, int, int>>
+    auto partition_offsets = [](const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diags, int d_groups) {
         std::vector<std::vector<int>> result(d_groups);
         std::vector<int> all_offsets;
         for (const auto& [off, _] : diags) all_offsets.push_back(off);
@@ -344,18 +354,16 @@ split_double_diagonals_by_group(
 
     int N = matrix_size_A;
 
-    std::map<int, std::map<int, std::unordered_map<int, std::vector<double>>>> grouped_A;
-    std::map<int, std::map<int, std::unordered_map<int, std::vector<double>>>> grouped_B;
+    std::map<int, std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>> grouped_A;
+    std::map<int, std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>> grouped_B;
 
     // Fill A (col-wise)
     for (int d_idx = 0; d_idx < diagonal_group_A; ++d_idx) {
         for (int offset : offset_groups_A[d_idx]) {
             const auto& values = diagonals_A.at(offset);
-            for (int i = 0; i < values.size(); ++i) {
-                int row = (offset >= 0) ? i : i - offset;
-                int col = (offset >= 0) ? i + offset : i;
+            for (const auto& [val, row, col] : values) {
                 int col_group = std::min(col * num_groups / N, num_groups - 1);
-                grouped_A[col_group][d_idx][offset].push_back(values[i]);
+                grouped_A[col_group][d_idx][offset].emplace_back(val, row, col);
             }
         }
     }
@@ -364,11 +372,9 @@ split_double_diagonals_by_group(
     for (int d_idx = 0; d_idx < diagonal_group_B; ++d_idx) {
         for (int offset : offset_groups_B[d_idx]) {
             const auto& values = diagonals_B.at(offset);
-            for (int i = 0; i < values.size(); ++i) {
-                int row = (offset >= 0) ? i : i - offset;
-                int col = (offset >= 0) ? i + offset : i;
+            for (const auto& [val, row, col] : values) {
                 int row_group = std::min(row * num_groups / N, num_groups - 1);
-                grouped_B[row_group][d_idx][offset].push_back(values[i]);
+                grouped_B[row_group][d_idx][offset].emplace_back(val, row, col);
             }
         }
     }
@@ -379,20 +385,21 @@ split_double_diagonals_by_group(
 
 
 
+
 // Helper to print grouped diagonals
 void print_groups(
-    const std::map<int, std::map<int, std::unordered_map<int, std::vector<double>>>>& grouped,
+    const std::map<int, std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>>& grouped,
     std::ofstream& out) 
 {
     for (const auto& [rc_group, diag_groups] : grouped) {
         out << "=== Row/Col Group " << rc_group << " ===\n";
         for (const auto& [d_group, offset_map] : diag_groups) {
             out << "  Diagonal Group " << d_group << ":\n";
-            for (const auto& [offset, values] : offset_map) {
-                out << "    Offset " << offset << ": ";
-                for (double v : values)
-                    out << v << " ";
-                out << "\n";
+            for (const auto& [offset, tuples] : offset_map) {
+                out << "    Offset " << offset << ":\n";
+                for (const auto& [val, i, j] : tuples) {
+                    out << "      (" << i << ", " << j << ") = " << val << "\n";
+                }
             }
         }
     }

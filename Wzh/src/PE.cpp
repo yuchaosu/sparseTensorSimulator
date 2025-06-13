@@ -129,10 +129,12 @@ void PE::cycle() {
         } else if (valueA.index2 < valueB.index1) {
             out << "PE (" << r << ", " << c << ") Index mismatch, block the large one, B: " << valueB.value << " " << valueB.index1 << " " << valueB.index2 << "\n";
             sendBottom();
+            sendRight();
             receivedA.pop();
         } else if (valueA.index2 > valueB.index1) {
             out << "PE (" << r << ", " << c << ") Index mismatch, block the large one, A: " << valueA.value << " " << valueA.index1 << " " << valueA.index2 << "\n";
             sendRight();
+            sendBottom();
             receivedB.pop();
         }
     }

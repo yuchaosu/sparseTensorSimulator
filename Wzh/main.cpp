@@ -35,13 +35,13 @@ void run_test_case(int i, const std::vector<int>& A_offsets, const std::vector<i
     out << "Extracted Diagonals from A:\n";
     for (const auto& [offset, vals] : A_diag) {
         out << "Offset " << offset << ": ";
-        for (double v : vals) out << v << " ";
+        for (const auto& [val, i, j] : vals) out << val << " ";
         out << "\n";
     }
     out << "Extracted Diagonals from B:\n";
     for (const auto& [offset, vals] : B_diag) {
         out << "Offset " << offset << ": ";
-        for (double v : vals) out << v << " ";
+        for (const auto& [val, i, j] : vals) out << val << " ";
         out << "\n";
     }
 
@@ -156,7 +156,7 @@ void run_test_case(int i, const std::vector<int>& A_offsets, const std::vector<i
     // Perform dense multiplication
     auto C_ref = dense_matrix_multiply(A, B);
     
-    std::vector<int> C_offsets = computeResultDiagonals(A_offsets, B_offsets);
+    std::vector<int> C_offsets = computeResultDiagonals(A_offsets, B_offsets, size);
 
     // Extract diagonals from reference output
     auto C_ref_diag = extract_diagonals(C_ref, C_offsets);
@@ -164,7 +164,7 @@ void run_test_case(int i, const std::vector<int>& A_offsets, const std::vector<i
     out << "Reference Output Diagonals:\n";
     for (const auto& [offset, vals] : C_ref_diag) {
         out << "Offset " << offset << ": ";
-        for (double v : vals) out << v << " ";
+        for (const auto& [v, i, j] : vals) out << v << " ";
         out << "\n";
     }
 

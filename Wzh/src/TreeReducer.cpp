@@ -21,6 +21,7 @@ void TreeReducer::printResults() const {
     }
 }
 
+//<offset_index, <value, i, j>>
 std::map<int, std::vector<std::tuple<double, int, int>>> TreeReducer::getResults() const {
     std::map<int, std::vector<std::tuple<double, int, int>>> results;
     for (const auto& entry : psumOut) {
