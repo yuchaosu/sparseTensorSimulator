@@ -247,7 +247,11 @@ int main() {
 
 
     int mismatches = countMatrixMismatches(C_ref, simulated_results, out);
-
+    if (mismatches > 0) {
+        out << "Mismatch found! Number of mismatches: " << mismatches << "\n";
+    } else {
+        out << "All tests passed successfully!\n";
+    }
 
     out << "Overall Cycles: " << overall_cycles << "\n";
     
