@@ -23,12 +23,12 @@ void Grid::connectNeighbors() {
     for (int i = 0; i < rows; ++i) {
         for (int j = 0; j < cols; ++j) {
             if (i > 0) {
-                Connection* vertical_conn = new Connection();
+                Connection* vertical_conn = new Connection(out);
                 pes[i][j]->setTopConnection(vertical_conn);
                 pes[i - 1][j]->setBottomConnection(vertical_conn);  // Connect top PE's bottom to current PE's top
             }
             if (j > 0) {
-                Connection* horizontal_conn = new Connection();
+                Connection* horizontal_conn = new Connection(out);
                 pes[i][j]->setLeftConnection(horizontal_conn);
                 pes[i][j - 1]->setRightConnection(horizontal_conn);  // Connect left PE's right to current PE's left
             }
