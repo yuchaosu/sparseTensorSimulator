@@ -6,7 +6,7 @@
 
 using namespace std;
 
-Connection::Connection() {
+Connection::Connection(std::ostream& out) : out(out) {
     this->pending_src = false;
     this->pending_psum = false;
     this->pending_transfer = false;
@@ -16,7 +16,7 @@ Connection::Connection() {
 
 
 
-//Send a package to the interconnection. If there is no remaining bandiwth an exception is raised
+//Send a package to the interconnection. If there is no remaining bandwidth an exception is raised
 void Connection::send() {
     this->src = src;
     this->psum = psum;
@@ -30,37 +30,55 @@ void Connection::send() {
 
 //Return the packages from the interconnection
 void Connection::receive(DataPackage src, DataPackage psum, DataPackage transfer) {
-    assert(!this->pending_src && "Connection already has pending src data. Cannot receive new data until the previous is sent."); 
+    if(this->pending_src) {
+        out << "Connection already has pending src data. Cannot receive new data until the previous is sent." << endl;
+        return;
+    }
     this->src = src;
     this->pending_src = true;
-    assert(!this->pending_psum && "Connection already has pending psum data. Cannot receive new data until the previous is sent.");
+    if(this->pending_psum) {
+        out << "Connection already has pending psum data. Cannot receive new data until the previous is sent." << endl;
+        return;
+    }
     this->psum = psum;
     this->pending_psum = true;
-    assert(!this->pending_transfer && "Connection already has pending transfer data. Cannot receive new data until the previous is sent.");
+    if(this->pending_transfer) {
+        out << "Connection already has pending transfer data. Cannot receive new data until the previous is sent." << endl;
+        return;
+    }
     this->transfer = transfer;
     this->pending_transfer = true;
 }
 
 void Connection::receiveSrc(DataPackage src) {
-    assert(!this->pending_src && "Already has buffered src data.");
+    if(this->pending_src) {
+        out << "Connection already has buffered src data. Cannot receive new data until the previous is sent." << endl;
+        return;
+    }
     this->src = src;
     this->pending_src = true;
-    printf("Connection: received src data: %f, index1: %d, index2: %d\n", src.value, src.index1, src.index2);
+    out << "Connection: received src data: " << src.value << ", index1: " << src.index1 << ", index2: " << src.index2 << endl;
     receives++;
 }
 void Connection::receivePsum(DataPackage psum) {
-    assert(!this->pending_psum && "Already has buffered psum data.");
+    if(this->pending_psum) {
+        out << "Connection already has buffered psum data. Cannot receive new data until the previous is sent." << endl;
+        return;
+    }
     this->psum = psum;
     this->pending_psum = true;
-    printf("Connection: received psum data: %f, index1: %d, index2: %d\n", psum.value, psum.index1, psum.index2);
+    out << "Connection: received psum data: " << psum.value << ", index1: " << psum.index1 << ", index2: " << psum.index2 << endl;
     receives++;
 }
 
 void Connection::receiveTransfer(DataPackage transfer) {
-    assert(!this->pending_transfer && "Already has buffered transfer data.");
+    if(this->pending_transfer) {
+        out << "Connection already has buffered transfer data. Cannot receive new data until the previous is sent." << endl;
+        return;
+    }
     this->transfer = transfer;
     this->pending_transfer = true;
-    printf("Connection: received transfer data: %f, index1: %d, index2: %d\n", transfer.value, transfer.index1, transfer.index2);
+    out << "Connection: received transfer data: " << transfer.value << ", index1: " << transfer.index1 << ", index2: " << transfer.index2 << endl;
     receives++;
 }
 
@@ -71,7 +89,7 @@ DataPackage Connection::sendSrc() {
         return this->src;
     }
     else {
-        assert(false && "No pending src data to send.");
+        out << "No pending src data to send." << endl;
         return DataPackage();  // Return an empty package if no pending data
     }
 }
@@ -83,7 +101,7 @@ DataPackage Connection::sendPsum() {
         return this->psum;
     }
     else {
-        assert(false && "No pending psum data to send.");
+        out << "No pending psum data to send." << endl;
         return DataPackage();  // Return an empty package if no pending data
     }
 }
@@ -95,7 +113,7 @@ DataPackage Connection::sendTransfer() {
         return this->transfer;
     }
     else {
-        assert(false && "No pending transfer data to send.");
+        out << "No pending transfer data to send." << endl;
         return DataPackage();  // Return an empty package if no pending data
     }
 }
@@ -113,7 +131,7 @@ bool Connection::pendingTransfer() {
 }
 
 void Connection::printEnergy() {
-    printf("Connection: sends=%zu, receives=%zu\n", sends, receives);
+    out << "Connection: sends=" << sends << ", receives=" << receives << endl;
 }
 
 

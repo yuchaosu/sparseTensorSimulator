@@ -25,8 +25,10 @@ private:
     size_t sends; // Number of sends
     size_t receives; // Number of receives
 
+    std::ostream& out; // Output stream for logging
+
 public:
-    Connection();
+    Connection(std::ostream& out);
     void send(); //Package of data to be send. The sum of all the size_package of each package must not be greater than bw.
     void receive(DataPackage src, DataPackage psum, DataPackage transfer);  //Receive a  packages from the connection
     void receiveSrc(DataPackage src);
