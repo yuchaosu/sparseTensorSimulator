@@ -68,4 +68,12 @@ std::pair<
     const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals_B,
     int num_groups, int diagonal_group_A, int diagonal_group_B);
 
+
+std::vector<std::vector<double>> generate_random_vector(int size, double min_val = 0.0, double max_val = 10.0);
+void print_vector(const std::vector<std::vector<double>>& vector, std::ofstream& out);
+std::unordered_map<int, std::vector<std::tuple<double, int, int>>> rebuild_vector(const std::vector<std::vector<double>>& matrix);
+std::vector<std::vector<double>> matrix_vector_multiply(const std::vector<std::vector<double>>& A, const std::vector<std::vector<double>>& B);
+
+
+
 #endif // UTILITY_H

@@ -404,3 +404,45 @@ void print_groups(
         }
     }
 }
+
+
+
+std::vector<std::vector<double>> generate_random_vector(int size, double min_val, double max_val) {
+    std::vector<std::vector<double>> matrix(size, std::vector<double>(1));  // size x 1 matrix
+    for (int i = 0; i < size; ++i) {
+        matrix[i][0] = random_double(min_val, max_val);
+    }
+    return matrix;
+}
+
+void print_vector(const std::vector<std::vector<double>>& vector, std::ofstream& out) {
+    for (const auto& row : vector) {
+        for (double val : row) out << std::setw(12) << val;
+        out << std::endl;
+    }
+}
+
+std::unordered_map<int, std::vector<std::tuple<double, int, int>>> 
+rebuild_vector(const std::vector<std::vector<double>>& matrix) {
+    std::unordered_map<int, std::vector<std::tuple<double, int, int>>> vector;
+    std::vector<std::tuple<double, int, int>> entries;
+
+    for (int i = 0; i < matrix.size(); ++i) {
+        entries.emplace_back(matrix[i][0], i, 0);  // value, row, col (always col 0)
+    }
+
+    vector[0] = std::move(entries);  // store under offset 0
+    return vector;
+}
+
+
+std::vector<std::vector<double>> matrix_vector_multiply(const std::vector<std::vector<double>>& A, const std::vector<std::vector<double>>& B) {
+    int size = A.size();
+    std::vector<std::vector<double>> C(size, std::vector<double>(1, 0.0));  // Result is also a column vector
+
+    for (int i = 0; i < size; ++i)
+        for (int k = 0; k < size; ++k)
+            C[i][0] += A[i][k] * B[k][0];
+
+    return C;
+}
