@@ -118,6 +118,32 @@ DataPackage Connection::sendTransfer() {
     }
 }
 
+void Connection::receiveInjectionFinished(bool finished) {
+    if(this->pending_injection_finished) {
+        out << "Connection already has buffered injection finished data. Cannot receive new data until the previous is sent." << endl;
+        return;
+    }
+    this->injection_finished = finished;
+    this->pending_injection_finished = true;
+    out << "Connection: received injection finished data: " << finished << endl;
+    receives++;
+}
+
+bool Connection::isInjectionFinished() {
+    if (this->pending_injection_finished) {
+        this->pending_injection_finished = false;  // Reset after checking
+        return this->injection_finished;
+    }
+    else {
+        out << "No pending injection finished data to check." << endl;
+        return false;  // Return false if no pending data
+    }
+}
+
+bool Connection::pendingInjectionFinished() {
+    return pending_injection_finished;
+}
+
 bool Connection::pendingSrc() {
     return pending_src;
 }

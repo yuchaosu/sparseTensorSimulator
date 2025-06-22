@@ -75,5 +75,4 @@ std::unordered_map<int, std::vector<std::tuple<double, int, int>>> rebuild_vecto
 std::vector<std::vector<double>> matrix_vector_multiply(const std::vector<std::vector<double>>& A, const std::vector<std::vector<double>>& B);
 
 
-
 #endif // UTILITY_H
