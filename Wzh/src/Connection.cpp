@@ -160,6 +160,28 @@ void Connection::printEnergy() {
     out << "Connection: sends=" << sends << ", receives=" << receives << endl;
 }
 
+void Connection::receiveHandshakeFinished(bool finished) {
+    if(this->pending_handshake_finished) {
+        out << "Connection already has buffered handshake finished data. Cannot receive new data until the previous is sent." << endl;
+        return;
+    }
+    this->handshake_finished = finished;
+    this->pending_handshake_finished = true;
+    out << "Connection: received handshake finished data: " << finished << endl;
+    receives++;
+}
 
+bool Connection::isHandshakeFinished() {
+    if (this->pending_handshake_finished) {
+        this->pending_handshake_finished = false;  // Reset after checking
+        return this->handshake_finished;
+    }
+    else {
+        out << "No pending handshake finished data to check." << endl;
+        return false;  // Return false if no pending data
+    }
+}
 
-
+bool Connection::pendingHandshakeFinished() {
+    return pending_handshake_finished;
+}

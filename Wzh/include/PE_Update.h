@@ -29,6 +29,8 @@ public:
     void sendPsum();
     void sendIsInjectionFinishedLeft();
     void sendIsInjectionFinishedBottom();
+    void finishHandshakeSend();
+    void finishHandshakeReceive();
     //void sendTransfer();
     //void sendReceivedPsum();
 
@@ -66,6 +68,8 @@ public:
     bool last_col = false; // Indicates if this is the last column
     bool sent_finished_left = false; // Indicates if the left connection has been sent
     bool sent_finished_top = false; // Indicates if the top connection has been sent
+    bool handshake_finished_right = false; // Indicates if the handshake is finished
+    bool handshake_finished_bottom = false; // Indicates if the handshake is finished
 };
 
 #endif // PE_H

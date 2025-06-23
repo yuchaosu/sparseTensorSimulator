@@ -19,11 +19,13 @@ private:
     bool pending_psum = false;
     bool pending_transfer = false;
     bool pending_injection_finished = false; // Indicates if the injection of data is finished
+    bool pending_handshake_finished = false; // Indicates if the handshake is finished
     //size_t bw;           // Size in bytes of actual data. In the simulator this size is greater since we wrap the data into wrappers to track.
     DataPackage src;   // Array of packages that are send/receive in  a certain cycle. The number of packages depends on the bw of the connection
     DataPackage psum;
     DataPackage transfer;
     bool injection_finished; // Indicates if the injection of data is finished
+    bool handshake_finished; // Indicates if the handshake is finished
     size_t sends = 0; // Number of sends
     size_t receives = 0; // Number of receives
 
@@ -37,16 +39,19 @@ public:
     void receivePsum(DataPackage psum);
     void receiveTransfer(DataPackage transfer);
     void receiveInjectionFinished(bool finished);
+    void receiveHandshakeFinished(bool finished);
 
     DataPackage sendSrc();
     DataPackage sendPsum();
     DataPackage sendTransfer();
     bool isInjectionFinished();
+    bool isHandshakeFinished();
 
     bool pendingSrc();
     bool pendingPsum();
     bool pendingTransfer();
     bool pendingInjectionFinished();
+    bool pendingHandshakeFinished();
     void printEnergy();
 
 };
