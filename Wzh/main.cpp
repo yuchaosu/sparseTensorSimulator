@@ -39,7 +39,7 @@ std::vector<std::vector<int>> generateReductionMap(
                 DiagonalReduction* reducer = new DiagonalReduction(index, out);
                 reducerMap[index] = reducer;
                 diagonalReductions.push_back(reducer);
-                out << "Created DiagonalReduction for index: " << index << " from (A" << A_offsets[j] << ", B" << B_offsets[i] << ")" << std::endl;
+                out << "Created DiagonalReduction for index: " << index << " from (A" << A_offsets[j] << ", B" << B_offsets_reversed[i] << ")" << std::endl;
                 out << "DiagonalReduction " << index << " connected with PE[" << i << ", " << j << "] " << std::endl;
             }
         }
@@ -151,6 +151,7 @@ void run_test_case(int i, const std::vector<int>& A_offsets, const std::vector<i
 
     bool injection_done_left = false;
     bool injection_done_top = false;
+    bool injection_done = false;
     std::vector<bool> col_finish_sent(COL, false);
     std::vector<bool> row_finish_sent(ROW, false);
     while(true) {
@@ -199,19 +200,18 @@ void run_test_case(int i, const std::vector<int>& A_offsets, const std::vector<i
         }
 
         
-        injection_done_top = true;
-        for (int i = 0; i < COL; ++i)
-            if (A_inject_index[i] < A_diag_packages[i].size() || top_in[i]->pendingSrc())
-                injection_done_top = false;
-        injection_done_left = true;
-        for (int i = 0; i < ROW; ++i)
-            if (B_inject_index[i] < B_diag_packages[i].size() || left_in[i]->pendingSrc())
-                injection_done_left = false;
+        injection_done = true;
+        for (int i = 0; i < ROW; ++i) {
+            if (left_in[i]->pendingSrc()) injection_done = false;
+        }
+        for (int i = 0; i < COL; ++i) {
+            if (top_in[i]->pendingSrc()) injection_done = false;
+        }
 
         grid.cycle();
         //reducer.cycle();
-        std::cout << "Grid state after cycle " << cycle << ":\n";
-        if(injection_done_left && injection_done_top && grid.isIdle()) {
+        //std::cout << "Grid state after cycle " << cycle << ":\n";
+        if(injection_done && grid.isIdle()) {
             out << "All data injected and processed. Breaking out of cycle loop.\n";
             break;
         }
@@ -221,14 +221,14 @@ void run_test_case(int i, const std::vector<int>& A_offsets, const std::vector<i
 
     //reducer.printResults();
 
-    std::cout <<"Grid Output Diagonals:\n";
-    for (const auto& [index, diag] : grid.getResults()) {
-        std::cout << "Diagonal " << index << ": ";
-        for (const auto& [val, i, j] : diag) {
-            std::cout << "(" << val << ", " << i << ", " << j << ") ";
-        }
-        std::cout << "\n";
-    }
+    // std::cout <<"Grid Output Diagonals:\n";
+    // for (const auto& [index, diag] : grid.getResults()) {
+    //     std::cout << "Diagonal " << index << ": ";
+    //     for (const auto& [val, i, j] : diag) {
+    //         std::cout << "(" << val << ", " << i << ", " << j << ") ";
+    //     }
+    //     std::cout << "\n";
+    // }
     std::map<int, std::vector<double>> results = addMissingZeros(grid.getResults(), size);
     out << "Simulated Final Results:\n";
     for (const auto& [key, vec] : results) {
@@ -280,13 +280,13 @@ int main() {
     int total_unsuccessful = 0;
     int total_cases = 0;
     std::cout << "Starting tests for symmetric offsets...\n";
-    for(int i = 3; i < 4; ++i) {
+    for(int i = 100; i < 101; ++i) {
         
         std::ofstream out("outputs/output_size_" + std::to_string(i) + "_v1.txt");
 
-        out << "Running test iteration " << i + 1 << std::endl;
+        //out << "Running test iteration " << i + 1 << std::endl;
 
-        std::vector<std::vector<int>> offset_set = generate_symmetric_offsets(i);
+        //std::vector<std::vector<int>> offset_set = generate_symmetric_offsets(i);
         
         int local_test_cases = 0;
         int local_unsuccessful = 0;
@@ -294,10 +294,12 @@ int main() {
         std::mutex mtx;
         std::vector<std::future<void>> futures;
 
-        for(int j = 0; j < offset_set.size(); ++j) {
-            for(int k = 0; k < offset_set.size(); ++k) {
-                std::vector<int> A_offsets = offset_set[j];
-                std::vector<int> B_offsets = offset_set[k];
+        //for(int j = 0; j < offset_set.size(); ++j) {
+        //    for(int k = 0; k < offset_set.size(); ++k) {
+                //std::vector<int> A_offsets = offset_set[j];
+                //std::vector<int> B_offsets = offset_set[k];
+                std::vector<int> A_offsets = {-49, 0, 49};
+                std::vector<int> B_offsets = {-49, 0, 49};
 
                 out << "A offsets: ";
                 for (int a : A_offsets) out << a << " ";
@@ -306,7 +308,7 @@ int main() {
                 out << "\n";
 
                 //futures.emplace_back(std::async(std::launch::async, [&offset_set, j, k, i, &local_unsuccessful, &local_test_cases, &mtx, &out]() {
-                run_test_case(i, offset_set[j], offset_set[k], local_unsuccessful, local_test_cases, mtx, out);
+                run_test_case(i, A_offsets, B_offsets, local_unsuccessful, local_test_cases, mtx, out);
                 //}));
                 std::cout << "Total test cases: " << local_test_cases << "\n";
                 std::cout << "Success: " << local_test_cases - local_unsuccessful << "\n";
@@ -316,8 +318,8 @@ int main() {
                 } else {
                     std::cout << "All tests passed successfully!\n";
                 }
-            }
-        }
+        //     }
+        // }
 
         //for (auto& f : futures) f.get();
 

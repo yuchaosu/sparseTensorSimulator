@@ -70,6 +70,8 @@ public:
     bool sent_finished_top = false; // Indicates if the top connection has been sent
     bool handshake_finished_right = false; // Indicates if the handshake is finished
     bool handshake_finished_bottom = false; // Indicates if the handshake is finished
+    int pre_leftIndex;
+    int pre_topIndex;
 };
 
 #endif // PE_H

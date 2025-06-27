@@ -9,12 +9,12 @@ Grid::Grid(int rows, int cols, std::vector<DiagonalReduction*>& diagonal_reducti
     for (int i = 0; i < rows; ++i)
         for (int j = 0; j < cols; ++j) {
             pes[i][j] = new PE(i, j, out);
-            if (i == rows - 1) {
-                pes[i][j]->setLastRow(true);  // Set last row flag for the last row PEs
-            }
-            if (j == cols - 1) {
-                pes[i][j]->setLastCol(true);  // Set last column flag for the last column PEs
-            }
+            // if (i == rows - 1) {
+            //     pes[i][j]->setLastRow(true);  // Set last row flag for the last row PEs
+            // }
+            // if (j == cols - 1) {
+            //     pes[i][j]->setLastCol(true);  // Set last column flag for the last column PEs
+            // }
         }
 
 
@@ -102,13 +102,6 @@ void Grid::cycle() {
     for (int i = 0; i < rows; ++i){
         for (int j = 0; j < cols; ++j) {
             pes[i][j]->cycle();
-            idle = true;
-            out << "PE (" << i << ", " << j << ") state after cycle: "
-                << (pes[i][j]->isIdle()? "Idle" : "Active") << std::endl; // Log idle state of each PE
-            //out << "Grid State: " << (idle ? "Idle" : "Active") << std::endl;
-            idle = idle && pes[i][j]->isIdle(); // Update idle state based on PEs
-            out << "Grid State: " << (idle ? "Idle" : "Active") << std::endl;
-            //pes[i][j]->setInjectionFinished(injectionFinished);  // Set injection finished status for each PE
         }
     }
 
@@ -123,7 +116,12 @@ PE* Grid::getPE(int row, int col) const {
 }
 
 bool Grid::isIdle() const {
-    return idle;
+    for (const auto& row : pes) {
+        for (const auto& pe : row) {
+            if (!pe->isIdle()) return false;
+        }
+    }
+    return true;
 }
 
 std::map<int, std::vector<std::tuple<double, int, int>>> Grid::getResults() {

@@ -7,7 +7,7 @@
 template<typename T>
 class FIFO {
 public:
-    FIFO(size_t capacity = 1) : max_capacity(capacity) {}
+    FIFO(size_t capacity = 20000) : max_capacity(capacity) {}
 
     bool isFull() const { return buffer.size() >= max_capacity; }
     bool isEmpty() const { return buffer.empty(); }
@@ -25,6 +25,10 @@ public:
     void pop() {
         if (isEmpty()) throw std::underflow_error("FIFO is empty");
         buffer.pop();
+    }
+
+    size_t size() const {
+        return buffer.size();
     }
 
 private:
