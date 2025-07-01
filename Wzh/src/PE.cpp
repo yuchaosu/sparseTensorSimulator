@@ -69,18 +69,18 @@ void PE::sendRight() {
 void PE::receive() {
     if (connection_top && connection_top->pendingSrc()) {
         DataPackage src = connection_top->sendSrc();
-        if (src.value != INT_MIN) {
+        //if (src.value != INT_MIN) {
             receivedA.push(src);
             out << "PE (" << r << ", " << c << ") received A from top: " << src.value << " \t index1: " << src.index1 << " \t index2: " << src.index2 << "\n";
-        }
+        //}
     }
 
     if (connection_left && connection_left->pendingSrc()) {
         DataPackage psum = connection_left->sendSrc();
-        if (psum.value != INT_MIN) {
+        //if (psum.value != INT_MIN) {
             receivedB.push(psum);
             out << "PE (" << r << ", " << c << ") received B from left: " << psum.value << " \t index1: " << psum.index1 << " \t index2: " << psum.index2 << "\n";
-        } 
+        //} 
     }
 
     // if (connection_top && connection_top->pendingPsum()) {
@@ -93,10 +93,10 @@ void PE::receive() {
 
     if (connection_top && connection_top->pendingTransfer()) {
         DataPackage transfer = connection_top->sendTransfer();
-        if (transfer.value != INT_MIN) {
+        //if (transfer.value != INT_MIN) {
             PsumOut.push(transfer);
             out << "PE (" << r << ", " << c << ") received Transfer from top: " << transfer.value << " \t index1: " << transfer.index1 << " \t index2: " << transfer.index2 << "\n";
-        }
+        //}
     }
     
 }
