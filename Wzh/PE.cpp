@@ -40,14 +40,22 @@ void PE::sendBottom() {
 }
 
 void PE::sendPsum() {
-    if (!PsumOut.isEmpty() && connection_bottom) {
-        DataPackage val = PsumOut.front();
+    if (!Psum.isEmpty() && connection_bottom) {
+        DataPackage val = Psum.front();
         connection_bottom->receivePsum(val);
         out << "PE (" << r << ", " << c << ") sending Psum to bottom: " << val.value << " \t index1: " << val.index1 << " \t index2: " << val.index2 << "\n";
-        PsumOut.pop();
+        Psum.pop();
     }
 }
 
+void PE::sendTransfer() {
+    if (!PsumOut.isEmpty() && connection_bottom) {
+        DataPackage val = PsumOut.front();
+        connection_bottom->receiveTransfer(val);
+        out << "PE (" << r << ", " << c << ") sending Transfer to bottom: " << val.value << " \t index1: " << val.index1 << " \t index2: " << val.index2 << "\n";
+        PsumOut.pop();
+    }
+}
 
 void PE::sendRight() {
     if (!receivedB.isEmpty() && connection_right) {
@@ -83,13 +91,13 @@ void PE::receive() {
         } 
     }
 
-    // if (connection_top && connection_top->pendingPsum()) {
-    //     DataPackage psum = connection_top->sendPsum();
-    //     if (psum.value != INT_MIN) {
-    //         PsumOut.push(psum);
-    //         out << "PE (" << r << ", " << c << ") received Psum from top: " << psum.value << " \t index1: " << psum.index1 << " \t index2: " << psum.index2 << "\n";
-    //     }
-    // }
+    if (connection_top && connection_top->pendingPsum()) {
+        DataPackage psum = connection_top->sendPsum();
+        if (psum.value != INT_MIN) {
+            PsumOut.push(psum);
+            out << "PE (" << r << ", " << c << ") received Psum from top: " << psum.value << " \t index1: " << psum.index1 << " \t index2: " << psum.index2 << "\n";
+        }
+    }
 
     if (connection_top && connection_top->pendingTransfer()) {
         DataPackage transfer = connection_top->sendTransfer();
@@ -103,7 +111,7 @@ void PE::receive() {
 void PE::cycle() {
     idle = true; // Reset idle state at the start of the cycle
 
-    if (!receivedA.isEmpty() || !receivedB.isEmpty() || !PsumOut.isEmpty()) {
+    if (!receivedA.isEmpty() || !receivedB.isEmpty() || !Psum.isEmpty() || !PsumOut.isEmpty()) {
         idle = false; // If there is any data to process, the PE is not idle
     }
 
@@ -112,7 +120,7 @@ void PE::cycle() {
         DataPackage valueB = receivedB.front();
         if (valueA.index2 == valueB.index1) {
             DataPackage result = DataPackage(valueA.value * valueB.value, valueA.index1, valueB.index2);
-            PsumOut.push(result);
+            Psum.push(result);
             out << "PE (" << r << ", " << c << ") computed multiplication: " << valueA.value << " * " << valueB.value << " = " << result.value << " \t index1: " << valueA.index1 << " \t index2: " << valueB.index2 << "\n";
             sendBottom();
             sendRight();
@@ -121,16 +129,12 @@ void PE::cycle() {
         } else if (valueA.index2 < valueB.index1) {
             out << "PE (" << r << ", " << c << ") Index mismatch, block the large one, B: " << valueB.value << " " << valueB.index1 << " " << valueB.index2 << "\n";
             sendBottom();
-            #ifdef PARALLEL
             sendRight();
-            #endif
             receivedA.pop();
         } else if (valueA.index2 > valueB.index1) {
             out << "PE (" << r << ", " << c << ") Index mismatch, block the large one, A: " << valueA.value << " " << valueA.index1 << " " << valueA.index2 << "\n";
             sendRight();
-            #ifdef PARALLEL
             sendBottom();
-            #endif
             receivedB.pop();
         }
     }
@@ -146,6 +150,7 @@ void PE::cycle() {
     }
 
     sendPsum();
+    sendTransfer();
     receive(); // Receive new data for the next cycle
     
 

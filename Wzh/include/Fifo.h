@@ -7,14 +7,13 @@
 template<typename T>
 class FIFO {
 public:
-    //FIFO(size_t capacity = 1) : max_capacity(capacity) {}
-    FIFO() = default; // Default constructor, no capacity limit
+    FIFO(size_t capacity = 20000) : max_capacity(capacity) {}
 
-    //bool isFull() const { return buffer.size() >= max_capacity; }
+    bool isFull() const { return buffer.size() >= max_capacity; }
     bool isEmpty() const { return buffer.empty(); }
 
     void push(const T& item) {
-        // if (isFull()) throw std::overflow_error("FIFO is full");
+        if (isFull()) return; // Optionally throw an exception or handle overflow
         buffer.push(item);
     }
 
@@ -28,9 +27,13 @@ public:
         buffer.pop();
     }
 
+    size_t size() const {
+        return buffer.size();
+    }
+
 private:
     std::queue<T> buffer;
-    //size_t max_capacity;
+    size_t max_capacity;
 };
 
 #endif // FIFO_H

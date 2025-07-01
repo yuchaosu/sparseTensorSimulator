@@ -1,5 +1,5 @@
-#ifndef PE_H
-#define PE_H
+#ifndef PE_UPDATE_H
+#define PE_UPDATE_H
 
 #include <iostream>
 #include <optional>
@@ -15,6 +15,9 @@ public:
     void send();
     void compute();
 
+    void setLastRow(bool last);
+    void setLastCol(bool last);
+
     void setTopConnection(Connection* conn);
     void setLeftConnection(Connection* conn);
     void setRightConnection(Connection* conn);
@@ -24,7 +27,12 @@ public:
     void sendBottom();
     void sendRight();
     void sendPsum();
-    void sendTransfer();
+    void sendIsInjectionFinishedLeft();
+    void sendIsInjectionFinishedBottom();
+    void finishHandshakeSend();
+    void finishHandshakeReceive();
+    //void sendTransfer();
+    //void sendReceivedPsum();
 
     void cycle();
 
@@ -36,20 +44,34 @@ public:
     Connection* getRightConnection();
     FIFO<DataPackage> receivedA; //Received data from the top connection
     FIFO<DataPackage> receivedB; //Received data from the left connection
-    FIFO<DataPackage> receivedPsum; //Received partial sums from other PEs
-    FIFO<DataPackage> Psum; //Current partial sum
-    FIFO<DataPackage> receivedTransfer; //Received transferred partial sums
-    FIFO<DataPackage> PsumOut; //Output partial sum, combination of Psum and receivedTransfer
+    //FIFO<DataPackage> receivedPsum; //Received partial sums from other PEs
+    //FIFO<DataPackage> receivedTransfer; //Received transferred partial sums
+    //FIFO<DataPackage> receivedPsumOut; //Output partial sum, combination of Psum and receivedTransfer
+    FIFO<DataPackage> PsumOut; //Current partial sum
+    //FIFO<DataPackage> transferOut; //Current transfer data
 
     int r,c;
     Connection* connection_top;
     Connection* connection_bottom;
     Connection* connection_left;
     Connection* connection_right;
-
     private:
-    bool idle = true; // Indicates if the PE is idle
+    bool idle = false; // Indicates if the PE is idle
     std::ostream& out;
+    bool blocked_A = false; // Indicates if PE is blocked on A
+    bool blocked_B = false; // Indicates if PE is blocked on B
+    bool sent_A = false; // Indicates if PE has sent A
+    bool sent_B = false; // Indicates if PE has sent B
+    bool injection_finished_left = false; // Indicates if all data has been injected
+    bool injection_finished_top = false; // Indicates if all data has been injected
+    bool last_row = false;
+    bool last_col = false; // Indicates if this is the last column
+    bool sent_finished_left = false; // Indicates if the left connection has been sent
+    bool sent_finished_top = false; // Indicates if the top connection has been sent
+    bool handshake_finished_right = false; // Indicates if the handshake is finished
+    bool handshake_finished_bottom = false; // Indicates if the handshake is finished
+    int pre_leftIndex;
+    int pre_topIndex;
 };
 
 #endif // PE_H
