@@ -73,6 +73,6 @@ std::vector<std::vector<double>> generate_random_vector(int size, double min_val
 void print_vector(const std::vector<std::vector<double>>& vector, std::ofstream& out);
 std::unordered_map<int, std::vector<std::tuple<double, int, int>>> rebuild_vector(const std::vector<std::vector<double>>& matrix);
 std::vector<std::vector<double>> matrix_vector_multiply(const std::vector<std::vector<double>>& A, const std::vector<std::vector<double>>& B);
-
+std::vector<int> rebuildOffsets(const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals);
 
 #endif // UTILITY_H

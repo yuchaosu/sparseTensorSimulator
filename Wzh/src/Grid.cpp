@@ -1,4 +1,4 @@
-#include "../include/Grid_Update.h"
+#include "../include/Grid.h"
 #include <cassert>
 #include <iostream>
 

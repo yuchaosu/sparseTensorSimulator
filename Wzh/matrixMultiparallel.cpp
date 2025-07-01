@@ -2,12 +2,54 @@
 #include "./include/Grid.h"
 #include "./include/Connection.h"
 #include "./include/TreeReducer.h"
+#include "./include/DiagonalReduction.h"
 
 #include <vector>
 #include <iostream>
 #include <iomanip>
 #include <cassert>
 #include <algorithm>
+
+#define PARALLEL
+
+std::vector<std::vector<int>> generateReductionMap(
+    const std::vector<int>& A_offsets,
+    const std::vector<int>& B_offsets,
+    int size,
+    std::vector<DiagonalReduction*>& diagonalReductions,
+    std::ostream& out
+) {
+    size_t col = A_offsets.size();
+    size_t row = B_offsets.size();
+    std::vector<std::vector<int>> reductionMap(row, std::vector<int>(col, -1));
+
+    std::unordered_map<int, DiagonalReduction*> reducerMap;
+
+    std::vector<int> B_offsets_reversed = B_offsets;
+    std::reverse(B_offsets_reversed.begin(), B_offsets_reversed.end()); // Reverse to match the expected order
+    for (size_t i = 0; i < row; ++i) {
+        for (size_t j = 0; j < col; ++j) {
+            int index = A_offsets[j] + B_offsets_reversed[i];
+            reductionMap[i][j] = index;
+
+            if (reducerMap.find(index) == reducerMap.end()) {
+                DiagonalReduction* reducer = new DiagonalReduction(index, out);
+                reducerMap[index] = reducer;
+                diagonalReductions.push_back(reducer);
+                out << "Created DiagonalReduction for index: " << index << " from (A" << A_offsets[j] << ", B" << B_offsets_reversed[i] << ")" << std::endl;
+                out << "DiagonalReduction " << index << " connected with PE[" << i << ", " << j << "] " << std::endl;
+            }
+        }
+    }
+
+    out << "Final DiagonalReduction list:\n";
+    for (auto& reducer : diagonalReductions) {
+        out << " - Index: " << reducer->getIndex() << "\n";
+    }
+
+    return reductionMap;
+}
+
 
 int main() {
     
@@ -83,8 +125,26 @@ int main() {
 
                 int COL = A_diag.size();
                 int ROW = B_diag.size();
+                std::vector<int> A_index = rebuildOffsets(A_diag);
+                std::vector<int> B_index = rebuildOffsets(B_diag);
+                std::vector<DiagonalReduction*> diagonalReductions;
+                std::vector<std::vector<int>> reductionMap = generateReductionMap(A_index, B_index, size, diagonalReductions, out);
 
-                Grid grid(ROW, COL, out);
+                //print the reduction map
+                out << "Reduction Map:\n";  
+                for (const auto& row : reductionMap) {
+                    for (int val : row) {
+                        out << val << " ";
+                    }
+                    out << "\n";
+                }
+                out << "Diagonal Reductions Size: " << diagonalReductions.size() << "\n";
+                out << "Diagonal Reductions Indices:\n";
+                for (const auto& reduction : diagonalReductions) {
+                    out << reduction->getIndex() << " ";
+                }
+
+                Grid grid(ROW, COL, diagonalReductions, reductionMap, out);
                 std::vector<Connection*> left_in(ROW), top_in(COL);
                 
                 for (int i = 0; i < ROW; ++i) {
@@ -96,13 +156,13 @@ int main() {
                 grid.setInputConnections(top_in, left_in);
 
                 // Setup output connections
-                std::vector<Connection*> bottom_out(COL);
-                for (int i = 0; i < COL; ++i)
-                    bottom_out[i] = new Connection(out);
-                grid.setOutputConnections(bottom_out);
+                // std::vector<Connection*> bottom_out(COL);
+                // for (int i = 0; i < COL; ++i)
+                //     bottom_out[i] = new Connection(out);
+                // grid.setOutputConnections(bottom_out);
 
-                // Setup TreeReducer for collecting psum + transfer
-                TreeReducer reducer(bottom_out);
+                // // Setup TreeReducer for collecting psum + transfer
+                // TreeReducer reducer(bottom_out);
                 
                 //Convert diagonals to datapackages
                 std::vector<std::vector<DataPackage>> A_diag_packages = buildDatapackage(A_diag);
@@ -164,7 +224,7 @@ int main() {
                     }
 
                     grid.cycle();
-                    reducer.cycle();
+                    //reducer.cycle();
 
                     if(injection_done && grid.isIdle()) {
                         out << "All data injected and processed. Breaking out of cycle loop.\n";
@@ -174,7 +234,7 @@ int main() {
                 }
 
 
-                std::map<int, std::vector<std::tuple<double, int, int>>> results = reducer.getResults();
+                std::map<int, std::vector<std::tuple<double, int, int>>> results = grid.getResults();
 
                 //print results
                 out << "Results\n";
@@ -207,7 +267,7 @@ int main() {
 
                 for (auto* conn : left_in) delete conn;
                 for (auto* conn : top_in) delete conn;
-                for (auto* conn : bottom_out) delete conn;
+                //for (auto* conn : bottom_out) delete conn;
 
                 out << "=========================================\n";
 

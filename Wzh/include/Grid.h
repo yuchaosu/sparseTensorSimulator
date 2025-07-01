@@ -2,7 +2,7 @@
 #define GRID_UPDATE_H
 
 #include <vector>
-#include "PE_Update.h"
+#include "PE.h"
 #include "Connection.h"
 #include "DiagonalReduction.h"
 

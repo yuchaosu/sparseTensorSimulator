@@ -447,3 +447,11 @@ std::vector<std::vector<double>> matrix_vector_multiply(const std::vector<std::v
     return C;
 }
 
+std::vector<int> rebuildOffsets(const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals) {
+    std::vector<int> offsets;
+    for (const auto& [offset, _] : diagonals) {
+        offsets.push_back(offset);
+    }
+    //std::sort(offsets.begin(), offsets.end());
+    return offsets;
+}
