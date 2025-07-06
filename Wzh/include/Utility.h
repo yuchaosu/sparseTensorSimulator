@@ -4,13 +4,13 @@
 #include <iostream>
 #include <limits>
 #include <cmath>
-
+#include <sstream>
 #include <vector>
 #include <map>
 #include <unordered_map>
 #include <tuple>
 #include <fstream>
-
+#define PARALLEL
 
 constexpr int INVALID_INT = std::numeric_limits<int>::min();
 constexpr double INVALID_DOUBLE = std::numeric_limits<double>::quiet_NaN();
@@ -74,5 +74,7 @@ void print_vector(const std::vector<std::vector<double>>& vector, std::ofstream&
 std::unordered_map<int, std::vector<std::tuple<double, int, int>>> rebuild_vector(const std::vector<std::vector<double>>& matrix);
 std::vector<std::vector<double>> matrix_vector_multiply(const std::vector<std::vector<double>>& A, const std::vector<std::vector<double>>& B);
 std::vector<int> rebuildOffsets(const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals);
-
+std::vector<int> extractDiagonalOffsets(const std::string& filename);
+std::unordered_map<int, std::vector<std::tuple<double, int, int>>>
+createDiagonalMap(const std::string& filename, const std::vector<int>& diagonalOffsets, int matrixSize);
 #endif // UTILITY_H
