@@ -77,7 +77,7 @@ void PE::receive() {
             out << "PE (" << r << ", " << c << ") received A from top: " << src.value << " \t index1: " << src.index1 << " \t index2: " << src.index2 << "\n";
 
             receives++;
-        }
+        
 
     }
 
@@ -88,7 +88,7 @@ void PE::receive() {
             out << "PE (" << r << ", " << c << ") received B from left: " << psum.value << " \t index1: " << psum.index1 << " \t index2: " << psum.index2 << "\n";
 
             receives++;
-        } 
+        
 
     }
 
@@ -107,7 +107,7 @@ void PE::receive() {
             out << "PE (" << r << ", " << c << ") received Transfer from top: " << transfer.value << " \t index1: " << transfer.index1 << " \t index2: " << transfer.index2 << "\n";
 
             receives++;
-        }
+        
 
     }
     
