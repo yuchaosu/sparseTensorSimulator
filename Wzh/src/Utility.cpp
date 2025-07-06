@@ -5,6 +5,7 @@
 #include <iostream>
 #include <iomanip>
 #include <set>
+#include <unordered_set>
 
 
 double random_double(double min_val, double max_val) {
@@ -452,6 +453,129 @@ std::vector<int> rebuildOffsets(const std::unordered_map<int, std::vector<std::t
     for (const auto& [offset, _] : diagonals) {
         offsets.push_back(offset);
     }
-    //std::sort(offsets.begin(), offsets.end());
+    std::cout << "Rebuilt offsets: ";
+    for (int offset : offsets) {
+        std::cout << offset << " ";
+    }
+    std::cout << std::endl;
+    std::sort(offsets.begin(), offsets.end());
+    std::cout << "Sorted offsets: ";
+    for (int offset : offsets) {
+        std::cout << offset << " ";
+    }
+    std::cout << std::endl;
     return offsets;
+}
+
+
+std::vector<int> extractDiagonalOffsets(const std::string& filename) {
+    std::set<int> diagonals;
+
+    std::ifstream infile(filename);
+    if (!infile.is_open()) {
+        std::cerr << "Error opening file: " << filename << std::endl;
+        return {}; // Return empty vector
+    }
+
+    std::string line;
+    while (std::getline(infile, line)) {
+        // Example line: (2,3): 0.500000
+
+        size_t pos1 = line.find('(');
+        size_t pos2 = line.find(',');
+        size_t pos3 = line.find(')');
+
+        if (pos1 == std::string::npos || pos2 == std::string::npos || pos3 == std::string::npos) {
+            continue; // Skip malformed lines
+        }
+
+        std::string row_str = line.substr(pos1 + 1, pos2 - pos1 - 1);
+        std::string col_str = line.substr(pos2 + 1, pos3 - pos2 - 1);
+
+        int row = std::stoi(row_str);
+        int col = std::stoi(col_str);
+
+        int offset = col - row;
+        diagonals.insert(offset);
+    }
+
+    // Copy to vector
+    std::vector<int> diag_vector(diagonals.begin(), diagonals.end());
+
+    return diag_vector;
+}
+
+std::unordered_map<int, std::vector<std::tuple<double, int, int>>>
+createDiagonalMap(const std::string& filename, const std::vector<int>& diagonalOffsets, int matrixSize)
+{
+    // Convert vector to set for fast lookup
+    std::unordered_set<int> diagonalSet(diagonalOffsets.begin(), diagonalOffsets.end());
+
+    // Map: diagonal -> map of (i,j) -> value
+    std::unordered_map<int, std::map<std::pair<int, int>, double>> diagPositionMap;
+
+    std::ifstream infile(filename);
+    if (!infile.is_open()) {
+        std::cerr << "Error opening file: " << filename << std::endl;
+        return {};
+    }
+
+    std::string line;
+    while (std::getline(infile, line)) {
+        size_t pos1 = line.find('(');
+        size_t pos2 = line.find(',');
+        size_t pos3 = line.find(')');
+        size_t colon = line.find(':');
+
+        if (pos1 == std::string::npos || pos2 == std::string::npos || pos3 == std::string::npos || colon == std::string::npos) {
+            continue; // Skip malformed lines
+        }
+
+        std::string row_str = line.substr(pos1 + 1, pos2 - pos1 - 1);
+        std::string col_str = line.substr(pos2 + 1, pos3 - pos2 - 1);
+        std::string val_str = line.substr(colon + 1);
+
+        int row = std::stoi(row_str);
+        int col = std::stoi(col_str);
+        double value = std::stod(val_str);
+
+        int offset = col - row;
+
+        if (diagonalSet.find(offset) != diagonalSet.end()) {
+            diagPositionMap[offset][{row, col}] = value;
+        }
+    }
+
+    // Final output map
+    std::unordered_map<int, std::vector<std::tuple<double, int, int>>> result;
+
+    for (int offset : diagonalOffsets) {
+        std::vector<std::tuple<double, int, int>> entries;
+
+        // For each position on this diagonal
+        for (int i = 0; i < matrixSize; ++i) {
+            int j = i + offset;
+
+            if (j < 0 || j >= matrixSize) {
+                continue; // Out of bounds
+            }
+
+            auto it_diag = diagPositionMap.find(offset);
+            if (it_diag != diagPositionMap.end()) {
+                auto it_pos = it_diag->second.find({i, j});
+                if (it_pos != it_diag->second.end()) {
+                    // Found value
+                    entries.emplace_back(it_pos->second, i, j);
+                    continue;
+                }
+            }
+
+            // Missing, fill with zero
+            entries.emplace_back(0.0, i, j);
+        }
+
+        result[offset] = std::move(entries);
+    }
+
+    return result;
 }
