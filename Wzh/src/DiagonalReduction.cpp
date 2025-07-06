@@ -16,6 +16,7 @@ void DiagonalReduction::cycle() {
             out << "DiagonalReduction " << index << " received psum: " << psum.value 
                 << " at index (" << psum.index1 << ", " << psum.index2 << ") -> Total: " 
                 << diagonal[key] << "\n";
+            reduction++;
         }
     }
 }
@@ -34,4 +35,9 @@ void DiagonalReduction::addPort(Connection* port) {
 
 size_t DiagonalReduction::getPortsNum() const {
     return diagonalPorts.size();
+}
+
+void DiagonalReduction::printEnergy(std::ostream& out) const {
+    out << "DiagonalReduction " << index << " Energy Report:\n";
+    out << "Total reductions: " << reduction << "\n";
 }

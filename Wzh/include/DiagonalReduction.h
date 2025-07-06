@@ -11,6 +11,7 @@ private:
     int index;
     std::map<std::pair<int, int>, double> diagonal;
     std::ostream& out;  // Output stream for logging
+    int reduction = 0;  // Counter for reductions
 
 public:
     DiagonalReduction(int index, std::ostream& output_stream);
@@ -22,6 +23,7 @@ public:
 
     std::map<std::pair<int, int>, double> getResults() const;
     int getIndex() const;
+    void printEnergy(std::ostream& out) const;
     //std::map<int, std::vector<std::tuple<double, int, int>>> getResults() const;
 };
 

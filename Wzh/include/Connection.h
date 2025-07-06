@@ -52,7 +52,7 @@ public:
     bool pendingTransfer();
     bool pendingInjectionFinished();
     bool pendingHandshakeFinished();
-    void printEnergy();
+    void printEnergy(std::ostream& out) const;
 
 };
 
