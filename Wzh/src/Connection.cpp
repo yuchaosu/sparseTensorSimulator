@@ -156,7 +156,7 @@ bool Connection::pendingTransfer() {
     return pending_transfer;
 }
 
-void Connection::printEnergy() {
+void Connection::printEnergy(std::ostream &out) const {
     out << "Connection: sends=" << sends << ", receives=" << receives << endl;
 }
 

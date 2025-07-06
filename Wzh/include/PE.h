@@ -39,6 +39,7 @@ public:
     bool isIdle() const;
     void setIdle(bool idle);
 
+    void printEnergy(std::ostream& out) const;
 
     Connection* getBottomConnection();
     Connection* getRightConnection();
@@ -72,6 +73,10 @@ public:
     bool handshake_finished_bottom = false; // Indicates if the handshake is finished
     int pre_leftIndex;
     int pre_topIndex;
+    int multiplies = 0; // Number of multiplications performed
+    int compares = 0; // Number of comparisons performed
+    int sends = 0; // Number of sends performed
+    int receives = 0; // Number of receives performed
 };
 
 #endif // PE_H

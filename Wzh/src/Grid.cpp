@@ -38,6 +38,7 @@ void Grid::connectNeighbors() {
                 Connection* vertical_conn = new Connection(out);
                 pes[i][j]->setTopConnection(vertical_conn);
                 pes[i - 1][j]->setBottomConnection(vertical_conn);
+                Connections.push_back(vertical_conn);
             }
 
             // Horizontal connection: from PE(i, j-1) right to PE(i, j) left
@@ -45,6 +46,7 @@ void Grid::connectNeighbors() {
                 Connection* horizontal_conn = new Connection(out);
                 pes[i][j]->setLeftConnection(horizontal_conn);
                 pes[i][j - 1]->setRightConnection(horizontal_conn);
+                Connections.push_back(horizontal_conn);
             }
         }
     }
@@ -56,6 +58,7 @@ void Grid::connectNeighbors() {
             if (pes[i][j]->getBottomConnection() == nullptr) {
                 Connection* vertical_conn = new Connection(out);
                 pes[i][j]->setBottomConnection(vertical_conn);
+                Connections.push_back(vertical_conn);
             }
 
             Connection* bottom_conn = pes[i][j]->getBottomConnection();
@@ -89,6 +92,8 @@ void Grid::setInputConnections(std::vector<Connection*> top_connections,
 
     for (int i = 0; i < rows; ++i)
         pes[i][0]->setLeftConnection(left_connections[i]);
+    Connections.insert(Connections.end(), top_connections.begin(), top_connections.end());
+    Connections.insert(Connections.end(), left_connections.begin(), left_connections.end());
 }
 
 void Grid::setOutputConnections(std::vector<Connection*> output_connections) {
@@ -137,4 +142,16 @@ std::map<int, std::vector<std::tuple<double, int, int>>> Grid::getResults() {
 
 void Grid::setInjectionFinished(bool finished) {
     injectionFinished = finished;
+}
+
+void Grid::printEnergy(std::ostream& out) const {
+    for (const auto& row : pes) {
+        for (const auto& pe : row) {
+            pe->printEnergy(out);
+        }
+    }
+
+    for (const auto& conn : Connections) {
+        conn->printEnergy(out);
+    }
 }

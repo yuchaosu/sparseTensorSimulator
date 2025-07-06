@@ -31,6 +31,7 @@ void PE::sendBottom() {
             // If the bottom connection is not pending, we can send the value
             connection_bottom->receiveSrc(val);
             out << "PE (" << r << ", " << c << ") sending to bottom: " << val.value << " \t index1: " << val.index1 << " \t index2: " << val.index2 << "\n";
+            sends++;
         } else {
             // If the bottom connection is pending, we might need to handle it differently
             // For now, we just print a message
@@ -45,6 +46,7 @@ void PE::sendPsum() {
         connection_bottom->receivePsum(val);
         out << "PE (" << r << ", " << c << ") sending Psum to bottom: " << val.value << " \t index1: " << val.index1 << " \t index2: " << val.index2 << "\n";
         PsumOut.pop();
+        sends++;
     }
 }
 
@@ -56,6 +58,7 @@ void PE::sendRight() {
             // If the right connection is not pending, we can send the value
             connection_right->receiveSrc(val);
             out << "PE (" << r << ", " << c << ") sending to right: " << val.value << " \t index1: " << val.index1 << " \t index2: " << val.index2 << "\n";
+            sends++;
         } else {
             // If the right connection is pending, we might need to handle it differently
             // For now, we just print a message
@@ -72,6 +75,7 @@ void PE::receive() {
         if (src.value != INT_MIN) {
             receivedA.push(src);
             out << "PE (" << r << ", " << c << ") received A from top: " << src.value << " \t index1: " << src.index1 << " \t index2: " << src.index2 << "\n";
+            receives++;
         }
     }
 
@@ -80,6 +84,7 @@ void PE::receive() {
         if (psum.value != INT_MIN) {
             receivedB.push(psum);
             out << "PE (" << r << ", " << c << ") received B from left: " << psum.value << " \t index1: " << psum.index1 << " \t index2: " << psum.index2 << "\n";
+            receives++;
         } 
     }
 
@@ -96,6 +101,7 @@ void PE::receive() {
         if (transfer.value != INT_MIN) {
             PsumOut.push(transfer);
             out << "PE (" << r << ", " << c << ") received Transfer from top: " << transfer.value << " \t index1: " << transfer.index1 << " \t index2: " << transfer.index2 << "\n";
+            receives++;
         }
     }
     
@@ -118,6 +124,8 @@ void PE::cycle() {
             sendRight();
             receivedA.pop();
             receivedB.pop();
+            multiplies++;
+            compares++;
         } else if (valueA.index2 < valueB.index1) {
             out << "PE (" << r << ", " << c << ") Index mismatch, block the large one, B: " << valueB.value << " " << valueB.index1 << " " << valueB.index2 << "\n";
             sendBottom();
@@ -125,6 +133,7 @@ void PE::cycle() {
             sendRight();
             #endif
             receivedA.pop();
+            compares++;
         } else if (valueA.index2 > valueB.index1) {
             out << "PE (" << r << ", " << c << ") Index mismatch, block the large one, A: " << valueA.value << " " << valueA.index1 << " " << valueA.index2 << "\n";
             sendRight();
@@ -132,6 +141,7 @@ void PE::cycle() {
             sendBottom();
             #endif
             receivedB.pop();
+            compares++;
         }
     }
     else if (!receivedB.isEmpty()) {
@@ -166,4 +176,12 @@ bool PE::isIdle() const {
 
 void PE::setIdle(bool idle) {
     this->idle = idle;
+}
+
+void PE::printEnergy(std::ostream& out) const {
+    out << "PE (" << r << ", " << c << ") Energy Report:\n";
+    out << "Multiplies: " << multiplies << "\n";
+    out << "Compares: " << compares << "\n";
+    out << "Sends: " << sends << "\n";
+    out << "Receives: " << receives << "\n";
 }

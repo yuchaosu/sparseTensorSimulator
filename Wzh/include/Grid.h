@@ -23,7 +23,7 @@ public:
     PE* getPE(int row, int col) const;
 
     bool isIdle() const;  // Check if the grid is idle
-
+    void printEnergy(std::ostream& out) const; // Print energy report for all PEs
 
 private:
     int rows, cols;
@@ -35,6 +35,7 @@ private:
     std::map<int, std::vector<std::tuple<double, int, int>>> diagonals;
     bool injectionFinished; // Indicates if all data has been injected
     bool idle = true; // Indicates if the grid is idle
+    std::vector<Connection*> Connections; // Top connections for input
 };
 
 #endif // GRID_H
