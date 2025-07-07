@@ -2,6 +2,7 @@
 #include "./include/Connection.h"
 #include "./include/TreeReducer.h"
 #include "./include/Utility.h"
+#include "./include/Cache.h"
 #include "./include/DiagonalReduction.h"
 
 #include <iostream>
@@ -12,8 +13,14 @@
 #include <sstream>
 #include <algorithm>
 
-// Random number generator
+DRAMStorage dram;
+SetAssociativeCache cache(2, 2);
 
+// Create TwoLevelBuffer
+TwoLevelBuffer buffer(dram, cache);
+
+// Scheduler
+Scheduler scheduler(buffer);
 
 std::vector<std::vector<int>> generateReductionMap(
     const std::vector<int>& A_offsets,
@@ -86,8 +93,8 @@ std::map<int, std::vector<std::tuple<double, int, int>>> combineMaps(const std::
 }
 
 void run_test_case( const std::vector<int>& A_offsets, const std::vector<int>& B_offsets,
-                    std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& A_diag,
-                    std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& B_diag,
+                    std::map<int, std::vector<std::tuple<double, int, int>>>& A_diag,
+                    std::map<int, std::vector<std::tuple<double, int, int>>>& B_diag,
                     std::map<int, std::vector<std::tuple<double, int, int>>>& results,
                     std::ofstream& out, std::ofstream& Energyout) {
     
@@ -237,6 +244,7 @@ int main() {
     int total_unsuccessful = 0;
     int total_cases = 0;
     int size = 256;
+    int cache_size = 64;
 
     std::cout << "Starting tests for symmetric offsets...\n";
     std::ofstream out("outputs/output_size_" + std::to_string(size) + "_Blocked.txt");
@@ -255,16 +263,32 @@ int main() {
     std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>,
     std::vector<int>, 
     std::vector<int>  
-    > split_diagonals = split_double_diagonals_by_size(A_diag, B_diag, 256);
+    > split_diagonals = split_double_diagonals_by_size(A_diag, B_diag, cache_size);
     //print the split diagonals
     std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> A_diag_groups = std::get<0>(split_diagonals);
     std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> B_diag_groups = std::get<1>(split_diagonals);
 
+    
+    for (const auto& [groupIndex, groupDataRaw] : A_diag_groups) {
+        // Convert unordered_map to GroupData (map)
+        GroupData groupData(groupDataRaw.begin(), groupDataRaw.end());
+        dram.store(groupIndex, groupData);
+    }
+    int dram_size = dram.size();
+    for (const auto& [groupIndex, groupDataRaw] : B_diag_groups) {
+        // Convert unordered_map to GroupData (map)
+        GroupData groupData(groupDataRaw.begin(), groupDataRaw.end());
+        dram.store(groupIndex + dram_size, groupData);
+    }
+    
+
     std::map<int, std::vector<std::tuple<double, int, int>>> results;
     for (int i = 0; i < A_diag_groups.size(); ++i) {
-        std::vector<int> A_offsets = rebuildOffsets(A_diag_groups[i]);
-        std::vector<int> B_offsets = rebuildOffsets(B_diag_groups[i]); 
-        run_test_case(A_offsets, B_offsets, A_diag_groups[i], B_diag_groups[i], results, out, Energyout);
+        std::map<int, std::vector<std::tuple<double, int, int>>> A_diag = scheduler.requestGroup(i);
+        std::map<int, std::vector<std::tuple<double, int, int>>> B_diag = scheduler.requestGroup(i + dram_size);
+        std::vector<int> A_offsets = rebuildOffsets(A_diag);
+        std::vector<int> B_offsets = rebuildOffsets(B_diag);
+        run_test_case(A_offsets, B_offsets, A_diag, B_diag, results, out, Energyout);
     }
     
     std::map<int, std::vector<double>> revised_results = addMissingZeros(results, size);
@@ -279,6 +303,7 @@ int main() {
     std::cout << "Total test cases: " << total_cases << "\n";
     std::cout << "Success: " << total_cases - total_unsuccessful << "\n";
     std::cout << "Successful Rate: " << (100.0 * (total_cases - total_unsuccessful) / total_cases) << "%" << "(" << total_cases - total_unsuccessful << "/" << total_cases << ")\n";
+    buffer.showCacheStats();
 
     return 0;
 }

@@ -48,7 +48,7 @@ std::vector<int> computeResultDiagonals(const std::vector<int>& A_diags, const s
 std::vector<std::vector<double>> diagonals_to_dense(int size, const std::map<int, std::vector<double>>& diagonals);
 std::vector<std::vector<double>> dense_matrix_multiply(const std::vector<std::vector<double>>& A, const std::vector<std::vector<double>>& B);
 void print_matrix(const std::vector<std::vector<double>>& matrix, std::ofstream& out);
-std::vector<std::vector<DataPackage>> buildDatapackage(std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals);
+std::vector<std::vector<DataPackage>> buildDatapackage(std::map<int, std::vector<std::tuple<double, int, int>>>& diagonals);
 int countMatrixMismatches(const std::vector<std::vector<double>>& ref, const std::vector<std::vector<double>>& sim, std::ofstream& out, double tolerance = 1e-6);
 std::map<int, std::vector<double>> addMissingZeros(const std::map<int, std::vector<std::tuple<double, int, int>>>& diagonals, int size);
 void show_progress_bar(int current, int total, int bar_width = 50);
@@ -72,7 +72,7 @@ std::vector<std::vector<double>> generate_random_vector(int size, double min_val
 void print_vector(const std::vector<std::vector<double>>& vector, std::ofstream& out);
 std::unordered_map<int, std::vector<std::tuple<double, int, int>>> rebuild_vector(const std::vector<std::vector<double>>& matrix);
 std::vector<std::vector<double>> matrix_vector_multiply(const std::vector<std::vector<double>>& A, const std::vector<std::vector<double>>& B);
-std::vector<int> rebuildOffsets(const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals);
+std::vector<int> rebuildOffsets(const std::map<int, std::vector<std::tuple<double, int, int>>>& diagonals);
 std::vector<int> extractDiagonalOffsets(const std::string& filename);
 std::unordered_map<int, std::vector<std::tuple<double, int, int>>>
 createDiagonalMap(const std::string& filename, const std::vector<int>& diagonalOffsets, int matrixSize);

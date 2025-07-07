@@ -158,7 +158,7 @@ void print_matrix(const std::vector<std::vector<double>>& matrix, std::ofstream&
     }
 }
 
-std::vector<std::vector<DataPackage>> buildDatapackage(std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals) {
+std::vector<std::vector<DataPackage>> buildDatapackage(std::map<int, std::vector<std::tuple<double, int, int>>>& diagonals) {
     std::vector<std::vector<DataPackage>> result;
     for (const auto& [offset, vals] : diagonals) {
         std::vector<DataPackage> packages;
@@ -448,7 +448,7 @@ std::vector<std::vector<double>> matrix_vector_multiply(const std::vector<std::v
     return C;
 }
 
-std::vector<int> rebuildOffsets(const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals) {
+std::vector<int> rebuildOffsets(const std::map<int, std::vector<std::tuple<double, int, int>>>& diagonals) {
     std::vector<int> offsets;
     for (const auto& [offset, _] : diagonals) {
         offsets.push_back(offset);
