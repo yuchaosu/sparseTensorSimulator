@@ -10,7 +10,6 @@
 #include <unordered_map>
 #include <tuple>
 #include <fstream>
-#define PARALLEL
 
 constexpr int INVALID_INT = std::numeric_limits<int>::min();
 constexpr double INVALID_DOUBLE = std::numeric_limits<double>::quiet_NaN();
@@ -77,4 +76,14 @@ std::vector<int> rebuildOffsets(const std::unordered_map<int, std::vector<std::t
 std::vector<int> extractDiagonalOffsets(const std::string& filename);
 std::unordered_map<int, std::vector<std::tuple<double, int, int>>>
 createDiagonalMap(const std::string& filename, const std::vector<int>& diagonalOffsets, int matrixSize);
+std::tuple<
+    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>,
+    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>,
+    std::vector<int>, // cutting indices A
+    std::vector<int>  // cutting indices B
+>
+split_double_diagonals_by_size(
+    const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals_A,
+    const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals_B,
+    int max_group_size);
 #endif // UTILITY_H

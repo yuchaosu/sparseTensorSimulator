@@ -38,6 +38,5 @@ size_t DiagonalReduction::getPortsNum() const {
 }
 
 void DiagonalReduction::printEnergy(std::ostream& out) const {
-    out << "DiagonalReduction " << index << " Energy Report:\n";
-    out << "Total reductions: " << reduction << "\n";
+    out << "Reductions: " << reduction << "\n";
 }

@@ -579,3 +579,86 @@ createDiagonalMap(const std::string& filename, const std::vector<int>& diagonalO
 
     return result;
 }
+
+std::tuple<
+    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>,
+    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>,
+    std::vector<int>, // cutting indices A
+    std::vector<int>  // cutting indices B
+>
+split_double_diagonals_by_size(
+    const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals_A,
+    const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals_B,
+    int max_group_size)
+{
+    if (diagonals_A.find(0) == diagonals_A.end() || diagonals_B.find(0) == diagonals_B.end()) {
+        throw std::invalid_argument("Main diagonal (offset 0) must exist in both A and B.");
+    }
+
+    int matrix_size_A = diagonals_A.at(0).size();
+    int matrix_size_B = diagonals_B.at(0).size();
+
+    if (matrix_size_A != matrix_size_B) {
+        throw std::invalid_argument("Matrix sizes of A and B must match.");
+    }
+
+    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> grouped_A;
+    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> grouped_B;
+
+    std::vector<int> cutting_indices_A;
+    std::vector<int> cutting_indices_B;
+
+    // Flatten A
+    std::vector<std::tuple<double, int, int, int>> all_A_entries;
+    for (const auto& [offset, vec] : diagonals_A) {
+        for (const auto& t : vec) {
+            all_A_entries.emplace_back(std::get<0>(t), std::get<1>(t), std::get<2>(t), offset);
+        }
+    }
+    std::sort(all_A_entries.begin(), all_A_entries.end(), [](const auto& a, const auto& b) {
+        return std::get<2>(a) < std::get<2>(b);
+    });
+
+    // Split A
+    int current_group_A = 0;
+    int current_group_count_A = 0;
+    cutting_indices_A.push_back(0);
+    for (size_t idx = 0; idx < all_A_entries.size(); ++idx) {
+        const auto& [val, row, col, offset] = all_A_entries[idx];
+        if (current_group_count_A >= max_group_size) {
+            ++current_group_A;
+            current_group_count_A = 0;
+            cutting_indices_A.push_back(static_cast<int>(idx));
+        }
+        grouped_A[current_group_A][offset].emplace_back(val, row, col);
+        ++current_group_count_A;
+    }
+
+    // Flatten B
+    std::vector<std::tuple<double, int, int, int>> all_B_entries;
+    for (const auto& [offset, vec] : diagonals_B) {
+        for (const auto& t : vec) {
+            all_B_entries.emplace_back(std::get<0>(t), std::get<1>(t), std::get<2>(t), offset);
+        }
+    }
+    std::sort(all_B_entries.begin(), all_B_entries.end(), [](const auto& a, const auto& b) {
+        return std::get<1>(a) < std::get<1>(b);
+    });
+
+    // Split B
+    int current_group_B = 0;
+    int current_group_count_B = 0;
+    cutting_indices_B.push_back(0);
+    for (size_t idx = 0; idx < all_B_entries.size(); ++idx) {
+        const auto& [val, row, col, offset] = all_B_entries[idx];
+        if (current_group_count_B >= max_group_size) {
+            ++current_group_B;
+            current_group_count_B = 0;
+            cutting_indices_B.push_back(static_cast<int>(idx));
+        }
+        grouped_B[current_group_B][offset].emplace_back(val, row, col);
+        ++current_group_count_B;
+    }
+
+    return {grouped_A, grouped_B, cutting_indices_A, cutting_indices_B};
+}

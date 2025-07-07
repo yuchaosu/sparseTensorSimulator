@@ -1,8 +1,8 @@
 import numpy as np
-
+qubit = 8  # Change this to the desired qubit number
 # Load the .npz file
-for index in range(1, 11):  # Change this to the desired index
-    data = np.load('../with_h_data/supermarq/ghz/10/gate_'+ str(index) + '.npz')
+for index in range(1, qubit+1):  # Change this to the desired index
+    data = np.load('../with_h_data/supermarq/ghz/' + str(qubit) + '/gate_'+ str(index) + '.npz')
 
     # List arrays (keys)
     print("Arrays in file:", data.files)
@@ -16,7 +16,7 @@ for index in range(1, 11):  # Change this to the desired index
     IMAG_EPS = 1e-8
     REAL_EPS = 1e-8
 
-    with open('matrix_output_'+ str(index) + '.txt', 'w') as f:
+    with open('./outputs/'+ str(qubit) + '/matrix_output_'+ str(index) + '.txt', 'w') as f:
         for i in range(matrix.shape[0]):
             for j in range(matrix.shape[1]):
                 v = matrix[i, j]

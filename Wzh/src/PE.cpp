@@ -185,7 +185,6 @@ void PE::setIdle(bool idle) {
 }
 
 void PE::printEnergy(std::ostream& out) const {
-    out << "PE (" << r << ", " << c << ") Energy Report:\n";
     out << "Multiplies: " << multiplies << "\n";
     out << "Compares: " << compares << "\n";
     out << "Sends: " << sends << "\n";

@@ -154,4 +154,8 @@ void Grid::printEnergy(std::ostream& out) const {
     for (const auto& conn : Connections) {
         conn->printEnergy(out);
     }
+
+    for (const auto& reduction : diagonalReductions) {
+        reduction->printEnergy(out);
+    }
 }

@@ -157,7 +157,8 @@ bool Connection::pendingTransfer() {
 }
 
 void Connection::printEnergy(std::ostream &out) const {
-    out << "Connection: sends=" << sends << ", receives=" << receives << endl;
+    out << "Sends=" << sends << "\n"
+        << "Receives=" << receives << endl;
 }
 
 void Connection::receiveHandshakeFinished(bool finished) {
