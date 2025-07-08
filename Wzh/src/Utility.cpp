@@ -583,8 +583,8 @@ createDiagonalMap(const std::string& filename, const std::vector<int>& diagonalO
 std::tuple<
     std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>,
     std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>,
-    std::vector<int>, // cutting indices A
-    std::vector<int>  // cutting indices B
+    std::vector<int>, // cutting indices (shared)
+    std::vector<int>  // cutting indices duplicate (same as above)
 >
 split_double_diagonals_by_size(
     const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals_A,
@@ -604,11 +604,9 @@ split_double_diagonals_by_size(
 
     std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> grouped_A;
     std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> grouped_B;
+    std::vector<int> cutting_indices;
 
-    std::vector<int> cutting_indices_A;
-    std::vector<int> cutting_indices_B;
-
-    // Flatten A
+    // Flatten A: sorted by column index
     std::vector<std::tuple<double, int, int, int>> all_A_entries;
     for (const auto& [offset, vec] : diagonals_A) {
         for (const auto& t : vec) {
@@ -619,22 +617,7 @@ split_double_diagonals_by_size(
         return std::get<2>(a) < std::get<2>(b);
     });
 
-    // Split A
-    int current_group_A = 0;
-    int current_group_count_A = 0;
-    cutting_indices_A.push_back(0);
-    for (size_t idx = 0; idx < all_A_entries.size(); ++idx) {
-        const auto& [val, row, col, offset] = all_A_entries[idx];
-        if (current_group_count_A >= max_group_size) {
-            ++current_group_A;
-            current_group_count_A = 0;
-            cutting_indices_A.push_back(static_cast<int>(idx));
-        }
-        grouped_A[current_group_A][offset].emplace_back(val, row, col);
-        ++current_group_count_A;
-    }
-
-    // Flatten B
+    // Flatten B: sorted by row index
     std::vector<std::tuple<double, int, int, int>> all_B_entries;
     for (const auto& [offset, vec] : diagonals_B) {
         for (const auto& t : vec) {
@@ -645,20 +628,210 @@ split_double_diagonals_by_size(
         return std::get<1>(a) < std::get<1>(b);
     });
 
-    // Split B
-    int current_group_B = 0;
-    int current_group_count_B = 0;
-    cutting_indices_B.push_back(0);
-    for (size_t idx = 0; idx < all_B_entries.size(); ++idx) {
-        const auto& [val, row, col, offset] = all_B_entries[idx];
-        if (current_group_count_B >= max_group_size) {
-            ++current_group_B;
-            current_group_count_B = 0;
-            cutting_indices_B.push_back(static_cast<int>(idx));
+    // Extract unique split positions
+    std::set<int> split_positions_set;
+    for (const auto& e : all_A_entries) split_positions_set.insert(std::get<2>(e)); // A column index
+    for (const auto& e : all_B_entries) split_positions_set.insert(std::get<1>(e)); // B row index
+
+    std::vector<int> split_positions(split_positions_set.begin(), split_positions_set.end());
+    std::sort(split_positions.begin(), split_positions.end());
+
+    // Now iterate through split positions
+    int current_group = 0;
+    cutting_indices.push_back(0);
+
+    size_t idx_A = 0;
+    size_t idx_B = 0;
+
+    int count_in_group = 0;
+
+    while (idx_A < all_A_entries.size() || idx_B < all_B_entries.size()) {
+        int next_split_pos = (current_group < split_positions.size()) ? split_positions[current_group] : 1000000;
+
+        // Process all A entries whose column <= next_split_pos
+        while (idx_A < all_A_entries.size() && std::get<2>(all_A_entries[idx_A]) <= next_split_pos) {
+            auto& [val, row, col, offset] = all_A_entries[idx_A];
+            grouped_A[current_group][offset].emplace_back(val, row, col);
+            ++idx_A;
+            ++count_in_group;
         }
-        grouped_B[current_group_B][offset].emplace_back(val, row, col);
-        ++current_group_count_B;
+
+        // Process all B entries whose row <= next_split_pos
+        while (idx_B < all_B_entries.size() && std::get<1>(all_B_entries[idx_B]) <= next_split_pos) {
+            auto& [val, row, col, offset] = all_B_entries[idx_B];
+            grouped_B[current_group][offset].emplace_back(val, row, col);
+            ++idx_B;
+            ++count_in_group;
+        }
+
+        // If max_group_size exceeded, start a new group
+        if (count_in_group >= max_group_size) {
+            ++current_group;
+            count_in_group = 0;
+            cutting_indices.push_back(next_split_pos);
+        }
+        else {
+            ++current_group; // move to next split range
+        }
     }
 
-    return {grouped_A, grouped_B, cutting_indices_A, cutting_indices_B};
+    // Return identical cutting indices for A and B for clarity
+    return {grouped_A, grouped_B, cutting_indices, cutting_indices};
+}
+
+
+void saveDiagonalMatrixDense(
+    const std::map<int, std::vector<double>>& diagonals,
+    int size,
+    const std::string& filename
+) {
+    std::ofstream out(filename);
+    if (!out.is_open()) {
+        std::cerr << "Cannot open file: " << filename << std::endl;
+        return;
+    }
+
+    out << std::fixed << std::setprecision(6);
+
+    // Create an empty matrix initialized to zeros
+    std::vector<std::vector<double>> dense(size, std::vector<double>(size, 0.0));
+
+    // Fill in the nonzero elements from the diagonals
+    for (const auto& [diagIndex, values] : diagonals) {
+        int d = diagIndex;
+        for (size_t k = 0; k < values.size(); ++k) {
+            int i, j;
+            if (d >= 0) {
+                i = k;
+                j = k + d;
+            } else {
+                i = k - d;
+                j = k;
+            }
+            if (i >= 0 && i < size && j >= 0 && j < size) {
+                dense[i][j] = values[k];
+            }
+        }
+    }
+
+    // Write the dense matrix row by row
+    for (int i = 0; i < size; ++i) {
+        for (int j = 0; j < size; ++j) {
+            out << std::setw(12) << dense[i][j];
+        }
+        out << "\n";
+    }
+
+    out.close();
+}
+
+std::unordered_map<int, std::vector<std::tuple<double, int, int>>> convertDiagonalMap(
+    const std::map<int, std::vector<double>>& input,
+    int size
+) {
+    std::unordered_map<int, std::vector<std::tuple<double, int, int>>> result;
+
+    for (const auto& [diagIndex, values] : input) {
+        int d = diagIndex;
+
+        // Check if all zeros
+        bool allZero = true;
+        for (double v : values) {
+            if (v != 0.0) {
+                allZero = false;
+                break;
+            }
+        }
+        if (allZero) {
+            continue;
+        }
+
+        std::vector<std::tuple<double, int, int>> tuples;
+
+        for (size_t k = 0; k < values.size(); ++k) {
+            double val = values[k];
+            int i, j;
+            if (d >= 0) {
+                i = k;
+                j = k + d;
+            } else {
+                i = k - d;
+                j = k;
+            }
+
+            if (i >= 0 && i < size && j >= 0 && j < size) {
+                tuples.emplace_back(val, i, j);
+            }
+        }
+
+        if (!tuples.empty()) {
+            result[d] = std::move(tuples);
+        }
+    }
+
+    return result;
+}
+
+bool compareMatrices(
+    const std::string& baselineFile,
+    const std::string& testFile,
+    int size,
+    double epsilon
+) {
+    std::ifstream baseIn(baselineFile);
+    std::ifstream testIn(testFile);
+
+    if (!baseIn.is_open()) {
+        std::cerr << "Cannot open baseline file: " << baselineFile << std::endl;
+        return false;
+    }
+    if (!testIn.is_open()) {
+        std::cerr << "Cannot open test file: " << testFile << std::endl;
+        return false;
+    }
+
+    std::string baseLine, testLine;
+    int row = 0;
+    bool allMatched = true;
+
+    while (std::getline(baseIn, baseLine) && std::getline(testIn, testLine)) {
+        std::istringstream baseStream(baseLine);
+        std::istringstream testStream(testLine);
+
+        double baseVal, testVal;
+        int col = 0;
+
+        while (baseStream >> baseVal && testStream >> testVal) {
+            double diff = std::abs(baseVal - testVal);
+            if (diff > epsilon) {
+                std::cout << "Mismatch at (" << row << "," << col << "): "
+                          << "baseline=" << baseVal
+                          << " test=" << testVal
+                          << " diff=" << diff
+                          << std::endl;
+                allMatched = false;
+            }
+            ++col;
+        }
+
+        // Check if the number of columns mismatched
+        if ((col != size) || !(baseStream.eof() && testStream.eof())) {
+            std::cout << "Expected size: " << size << ", Actual columns: " << col << std::endl;
+            std::cerr << "Column count mismatch or extra data on row " << row << std::endl;
+            allMatched = false;
+
+        }
+
+        ++row;
+    }
+    std::getline(baseIn, baseLine);
+    std::getline(testIn, testLine);
+ 
+    if ((row != size) || !(baseIn.eof() && testIn.eof())) {
+        std::cout << "Expected size: " << size << ", Actual rows: " << row << std::endl;
+        std::cerr << "Row count mismatch or extra data in files." << std::endl;
+        allMatched = false;
+    }
+
+    return allMatched;
 }

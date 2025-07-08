@@ -1,5 +1,7 @@
 import numpy as np
-qubit = 8  # Change this to the desired qubit number
+import os
+import sys  
+qubit = int(sys.argv[1])  # Change this to the desired qubit number
 # Load the .npz file
 for index in range(1, qubit+1):  # Change this to the desired index
     data = np.load('../with_h_data/supermarq/ghz/' + str(qubit) + '/gate_'+ str(index) + '.npz')
@@ -16,7 +18,11 @@ for index in range(1, qubit+1):  # Change this to the desired index
     IMAG_EPS = 1e-8
     REAL_EPS = 1e-8
 
-    with open('./outputs/'+ str(qubit) + '/matrix_output_'+ str(index) + '.txt', 'w') as f:
+    folder = './outputs/' + str(qubit)
+    os.makedirs(folder, exist_ok=True)
+
+    filename = os.path.join(folder, 'matrix_output_' + str(index) + '.txt')
+    with open(filename, 'w') as f:
         for i in range(matrix.shape[0]):
             for j in range(matrix.shape[1]):
                 v = matrix[i, j]

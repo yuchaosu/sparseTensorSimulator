@@ -86,4 +86,11 @@ split_double_diagonals_by_size(
     const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals_A,
     const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals_B,
     int max_group_size);
+void saveDiagonalMatrixDense(
+    const std::map<int, std::vector<double>>& diagonals,
+    int size,
+    const std::string& filename
+);
+std::unordered_map<int, std::vector<std::tuple<double, int, int>>> convertDiagonalMap(const std::map<int, std::vector<double>>& input, int size);
+bool compareMatrices(const std::string& baselineFile, const std::string& testFile, int size, double epsilon = 1e-6);
 #endif // UTILITY_H

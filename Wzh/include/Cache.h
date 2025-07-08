@@ -15,6 +15,7 @@ public:
     void store(int groupIndex, const GroupData& data);
     const GroupData& load(int groupIndex) const;
     const int size() const { return storage.size(); }
+    void clear() { storage.clear(); }
 private:
     std::unordered_map<int, GroupData> storage;
 };
