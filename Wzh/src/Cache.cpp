@@ -26,7 +26,7 @@ const GroupData* SetAssociativeCache::get(int groupIndex, bool& wasHit) {
     size_t idx = getSetIndex(groupIndex);
     auto& set = sets[idx];
     auto it = set.entries.find(groupIndex);
-    printStats();
+    //printStats();
     if (it == set.entries.end()) {
         ++misses;
         wasHit = false;
@@ -67,27 +67,31 @@ void SetAssociativeCache::put(int groupIndex, const GroupData& data) {
 void SetAssociativeCache::printStats() const {
     std::cout << "Cache Hits: " << hits << " Misses: " << misses << "\n";
     //print cache contents
-    std::cout << "+-------+----------------+\n";
-    std::cout << "| Set # |  Group Indices |\n";
-    std::cout << "+-------+----------------+\n";
+    // std::cout << "+-------+----------------+\n";
+    // std::cout << "| Set # |  Group Indices |\n";
+    // std::cout << "+-------+----------------+\n";
 
-    for (size_t i = 0; i < sets.size(); ++i) {
-        std::cout << "|  " << std::setw(3) << i << "   | ";
+    // for (size_t i = 0; i < sets.size(); ++i) {
+    //     std::cout << "|  " << std::setw(3) << i << "   | ";
 
-        if (sets[i].entries.empty()) {
-            std::cout << "(empty)";
-        } else {
-            bool first = true;
-            for (const auto& entry : sets[i].entries) {
-                if (!first) std::cout << ", ";
-                std::cout << entry.first;
-                first = false;
-            }
-        }
-        std::cout << "\n";
-    }
+    //     if (sets[i].entries.empty()) {
+    //         std::cout << "(empty)";
+    //     } else {
+    //         bool first = true;
+    //         for (const auto& entry : sets[i].entries) {
+    //             if (!first) std::cout << ", ";
+    //             std::cout << entry.first;
+    //             first = false;
+    //         }
+    //     }
+    //     std::cout << "\n";
+    // }
 
-    std::cout << "+-------+----------------+\n";
+    // std::cout << "+-------+----------------+\n";
+}
+
+void SetAssociativeCache::clear() {
+    sets = std::vector<CacheSet>(numSets);
 }
 
 // TwoLevelBuffer
@@ -115,6 +119,10 @@ void TwoLevelBuffer::showCacheStats() const {
     cache.printStats();
 }
 
+void TwoLevelBuffer::clear() {
+    dram.clear();
+    cache.clear();
+}
 // Scheduler
 Scheduler::Scheduler(TwoLevelBuffer& buffer)
     : buffer(buffer) {}

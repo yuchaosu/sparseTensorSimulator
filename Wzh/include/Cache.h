@@ -15,6 +15,7 @@ public:
     void store(int groupIndex, const GroupData& data);
     const GroupData& load(int groupIndex) const;
     const int size() const { return storage.size(); }
+    std::unordered_map<int, GroupData> getStorage() const { return storage; }
     void clear() { storage.clear(); }
 private:
     std::unordered_map<int, GroupData> storage;
@@ -41,6 +42,7 @@ public:
     SetAssociativeCache(size_t numSets, size_t waysPerSet);
 
     const GroupData* get(int groupIndex, bool& wasHit);
+    void clear();
     void put(int groupIndex, const GroupData& data);
     void printStats() const;
 };
@@ -57,6 +59,8 @@ public:
     const GroupData& get(int groupIndex);
     void put(int groupIndex, const GroupData& data);
     void showCacheStats() const;
+    void clear();
+
 };
 
 // Scheduler: Requests groups and stores results

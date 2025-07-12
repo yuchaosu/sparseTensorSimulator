@@ -804,11 +804,11 @@ bool compareMatrices(
         while (baseStream >> baseVal && testStream >> testVal) {
             double diff = std::abs(baseVal - testVal);
             if (diff > epsilon) {
-                std::cout << "Mismatch at (" << row << "," << col << "): "
-                          << "baseline=" << baseVal
-                          << " test=" << testVal
-                          << " diff=" << diff
-                          << std::endl;
+                // std::cout << "Mismatch at (" << row << "," << col << "): "
+                //           << "baseline=" << baseVal
+                //           << " test=" << testVal
+                //           << " diff=" << diff
+                //           << std::endl;
                 allMatched = false;
             }
             ++col;
@@ -834,4 +834,102 @@ bool compareMatrices(
     }
 
     return allMatched;
+}
+
+std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>
+splitDiagonals(
+    const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals,
+    int maxDiagonalsPerGroup
+) {
+    using DiagonalPair = std::pair<int, std::vector<std::tuple<double, int, int>>>;
+    
+    // Collect diagonals into a vector for sorting
+    std::vector<DiagonalPair> diagVec(diagonals.begin(), diagonals.end());
+
+    // Sort diagonals by offset
+    std::sort(diagVec.begin(), diagVec.end(), [](const auto& a, const auto& b) {
+        return a.first < b.first;
+    });
+
+    // Compute the total number of elements
+    size_t totalElements = 0;
+    for (const auto& [offset, vec] : diagVec) {
+        totalElements += vec.size();
+    }
+
+    // Compute approximate target size per group
+    size_t approxNumGroups = (diagVec.size() + maxDiagonalsPerGroup - 1) / maxDiagonalsPerGroup;
+    size_t targetPerGroup = totalElements / approxNumGroups;
+
+    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> result;
+
+    int currentGroup = 0;
+    size_t currentCount = 0;
+    size_t diagonalsInGroup = 0;
+
+    for (const auto& [offset, vec] : diagVec) {
+        // Assign to current group
+        result[currentGroup][offset] = vec;
+        currentCount += vec.size();
+        diagonalsInGroup++;
+
+        // Decide whether to start a new group
+        if ((diagonalsInGroup >= maxDiagonalsPerGroup || currentCount >= targetPerGroup) ) {
+            currentGroup++;
+            currentCount = 0;
+            diagonalsInGroup = 0;
+        }
+    }
+
+    return result;
+}
+
+std::pair<std::map<int, int>, int>
+splitMatrixDiagonals(
+    int matrixSize,
+    int diagonalsPerGroup
+) {
+    using Diagonal = std::pair<int, int>; // {diagonal index, number of elements}
+
+    std::vector<Diagonal> diagonals;
+
+    // Build list of diagonals and their sizes
+    for (int d = -(matrixSize - 1); d <= (matrixSize - 1); ++d) {
+        int elements = matrixSize - std::abs(d);
+        diagonals.emplace_back(d, elements);
+    }
+
+    // Compute total elements
+    int totalElements = 0;
+    for (const auto& [idx, cnt] : diagonals)
+        totalElements += cnt;
+
+    // Estimate approximate number of groups
+    int approxGroups = (diagonals.size() + diagonalsPerGroup - 1) / diagonalsPerGroup;
+
+    // Approx target elements per group
+    int targetPerGroup = totalElements / approxGroups;
+
+    std::map<int, int> result; // diagonalIndex -> groupIndex
+
+    int currentGroup = 0;
+    int currentCount = 0;
+    int diagonalsInGroup = 0;
+
+    for (const auto& [idx, cnt] : diagonals) {
+        result[idx] = currentGroup;
+        currentCount += cnt;
+        ++diagonalsInGroup;
+
+        // Start new group if needed
+        if ((diagonalsInGroup >= diagonalsPerGroup || currentCount >= targetPerGroup) &&
+            (currentGroup < approxGroups - 1)) {
+            ++currentGroup;
+            currentCount = 0;
+            diagonalsInGroup = 0;
+        }
+    }
+
+    int numGroups = currentGroup + 1;
+    return {result, numGroups};
 }

@@ -12,7 +12,7 @@
 #include <future>
 #include <sstream>
 #include <algorithm>
-#define SINGLE
+//#define SINGLE
 
 DRAMStorage dram;
 SetAssociativeCache cache(2, 2);
@@ -249,14 +249,14 @@ int main(int argc, char* argv[]) {
     int size = pow(2, qubit_size);
     int cache_size = argc > 2 ? std::stoi(argv[2]) : 64;
     int total_cycles = 0;
-    int grid_row = 3;
-    int grid_col = 3;
+    int grid_row = 8;
+    int grid_col = 8;
     #ifdef SINGLE
     std::cout << "Starting tests for symmetric offsets...\n";
     int indexA = argc > 3 ? std::stoi(argv[3]) : 1;
     int indexB = argc > 4 ? std::stoi(argv[4]) : 2;
-    std::ofstream out("outputs/output_size_" + std::to_string(qubit_size) + "_cacheSize_" + std::to_string(cache_size)+ "_" + std::to_string(indexA) + "_Blocked.log");
-    std::ofstream Energyout("outputs/output_size_" + std::to_string(qubit_size) + "_cacheSize_" + std::to_string(cache_size)+ "_" + std::to_string(indexA) + "_Blocked.count");
+    std::ofstream out("outputs/output_size_" + std::to_string(qubit_size) + "_cacheSize_" + std::to_string(cache_size)+ "_" + std::to_string(indexA) + "_DBlocked.log");
+    std::ofstream Energyout("outputs/output_size_" + std::to_string(qubit_size) + "_cacheSize_" + std::to_string(cache_size)+ "_" + std::to_string(indexA) + "_DBlocked.count");
     std::string filenameA = "./outputs/" + std::to_string(qubit_size) + "/matrix_output_" + std::to_string(indexA) + ".txt";
     std::string filenameB = "./outputs/" + std::to_string(qubit_size) + "/matrix_output_" + std::to_string(indexB) + ".txt";
     const std::vector<int>& A_offsets = extractDiagonalOffsets(filenameA);
@@ -265,15 +265,11 @@ int main(int argc, char* argv[]) {
     std::unordered_map<int, std::vector<std::tuple<double, int, int>>>  A_diag = createDiagonalMap(filenameA, A_offsets, size);
     std::unordered_map<int, std::vector<std::tuple<double, int, int>>>  B_diag = createDiagonalMap(filenameB, B_offsets, size);
 
-    std::tuple<
-    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>,
-    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>,
-    std::vector<int>, 
-    std::vector<int>  
-    > split_diagonals = split_double_diagonals_by_size(A_diag, B_diag, cache_size);
-    //print the split diagonals
-    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> A_diag_groups = std::get<0>(split_diagonals);
-    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> B_diag_groups = std::get<1>(split_diagonals);
+    int num_A = std::ceil(A_diag.size() / static_cast<double>(grid_col));
+        int num_B = std::ceil(B_diag.size() / static_cast<double>(grid_row));
+
+        std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> A_diag_groups = splitDiagonals(A_diag, num_A);
+        std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> B_diag_groups = splitDiagonals(B_diag, num_B);
 
     
     for (const auto& [groupIndex, groupDataRaw] : A_diag_groups) {
@@ -291,24 +287,27 @@ int main(int argc, char* argv[]) {
 
     std::map<int, std::vector<std::tuple<double, int, int>>> results;
     for (int i = 0; i < A_diag_groups.size(); ++i) {
-        std::map<int, std::vector<std::tuple<double, int, int>>> A_diag = scheduler.requestGroup(i);
-        std::map<int, std::vector<std::tuple<double, int, int>>> B_diag = scheduler.requestGroup(i + dram_size);
-        std::vector<int> A_offsets = rebuildOffsets(A_diag);
-        std::vector<int> B_offsets = rebuildOffsets(B_diag);
-        total_cycles += run_test_case(A_offsets, B_offsets, A_diag, B_diag, results, out, Energyout);
+        for (int j = 0; j < B_diag_groups.size(); j++){
+            std::map<int, std::vector<std::tuple<double, int, int>>> A_diag = scheduler.requestGroup(i);
+            std::map<int, std::vector<std::tuple<double, int, int>>> B_diag = scheduler.requestGroup(j + dram_size);
+            std::vector<int> A_offsets = rebuildOffsets(A_diag);
+            std::vector<int> B_offsets = rebuildOffsets(B_diag);
+            total_cycles += run_test_case(A_offsets, B_offsets, A_diag, B_diag, results, out, Energyout);
+        }
     }
     
     std::map<int, std::vector<double>> revised_results = addMissingZeros(results, size);
-    std::string output_filename = "outputs/output_size_" + std::to_string(qubit_size) + "_cacheSize_" + std::to_string(cache_size)+ "_"  + std::to_string(indexA) + "x" + std::to_string(indexB) + "_Blocked_result.txt";
+    std::string output_filename = "outputs/output_size_" + std::to_string(qubit_size) + "_cacheSize_" + std::to_string(cache_size)+ "_"  + std::to_string(indexA) + "x" + std::to_string(indexB) + "_DBlocked_result.txt";
     saveDiagonalMatrixDense(revised_results, size, output_filename);
     buffer.showCacheStats();
     std::cout << "Total cycles: " << total_cycles << "\n";
+    compareMatrices("./outputs/output_size_10_cacheSize_64_1x2_Blocked_result.txt", output_filename, size);
     #else
 
     std::cout << "Starting chained multiplication of " << qubit_size << " matrices.\n";
 
-    std::ofstream out("outputs/output_size_" + std::to_string(qubit_size) + "_Blocked.log");
-    std::ofstream Energyout("outputs/output_size_" + std::to_string(qubit_size) + "_Cache_" + std::to_string(cache_size) + "_Blocked.power");
+    std::ofstream out("outputs/output_size_" + std::to_string(qubit_size) + "_DBlocked.log");
+    std::ofstream Energyout("outputs/output_size_" + std::to_string(qubit_size) + "_Cache_" + std::to_string(cache_size) + "_DBlocked.power");
 
     std::string basePath = "./outputs/" + std::to_string(qubit_size) + "/";
 
@@ -325,47 +324,85 @@ int main(int argc, char* argv[]) {
         std::vector<int> B_offsets = extractDiagonalOffsets(filenameB);
         auto next_diag = createDiagonalMap(filenameB, B_offsets, size);
 
-        // You might split diagonals and store them in dram if needed
-        auto split_diagonals = split_double_diagonals_by_size(current_diag, next_diag, cache_size);
-
-        auto A_diag_groups = std::get<0>(split_diagonals);
-        auto B_diag_groups = std::get<1>(split_diagonals);
-
+        std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> A_diag_groups = splitDiagonals(current_diag, grid_col);
+        std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> B_diag_groups = splitDiagonals(next_diag, grid_row);
+        //print the split diagonals
+        std::cout << "Split A diagonals into " << A_diag_groups.size() << " groups:\n";
+        for (const auto& [groupIndex, groupDataRaw] : A_diag_groups) {
+            std::cout << "Group " << groupIndex << ": ";
+            for (const auto& [offset, vec] : groupDataRaw) {
+                std::cout << "Offset " << offset << " with " << vec.size() << " entries; ";
+            }
+            std::cout << "\n";
+        }
+        std::cout << "Split B diagonals into " << B_diag_groups.size() << " groups:\n";
+        for (const auto& [groupIndex, groupDataRaw] : B_diag_groups) {
+            std::cout << "Group " << groupIndex << ": ";    
+            for (const auto& [offset, vec] : groupDataRaw) {
+                std::cout << "Offset " << offset << " with " << vec.size() << " entries; ";
+            }
+            std::cout << "\n";
+        }
         // Store the groups in dram
-        dram.clear();
+        buffer.clear();
         for (const auto& [groupIndex, groupDataRaw] : A_diag_groups) {
             GroupData groupData(groupDataRaw.begin(), groupDataRaw.end());
             dram.store(groupIndex, groupData);
+            // Print the group data
+            std::cout << "Stored A group " << groupIndex << " with " << groupData.size() << " entries:\n";
+            for (const auto& [offset, vec] : groupData) {
+                std::cout << "Offset " << offset << " with " << vec.size() << " entries; ";
+            }
+            std::cout << "\n";
+            
         }
         int dram_size = dram.size();
         for (const auto& [groupIndex, groupDataRaw] : B_diag_groups) {
             GroupData groupData(groupDataRaw.begin(), groupDataRaw.end());
             dram.store(groupIndex + dram_size, groupData);
         }
-
+        //print dram content
+        std::cout << "Dram size: " << dram.size() << "\n";
+        for (const auto& [groupIndex, groupData] : dram.getStorage()) {
+            std::cout << "Dram group " << groupIndex << " with " << groupData.size() << " entries:\n";
+            for (const auto& [offset, vec] : groupData) {
+                std::cout << "Offset " << offset << " with " << vec.size() << " entries; ";
+            }
+            std::cout << "\n";
+        }
         // Prepare a new accumulator for this step
         std::map<int, std::vector<std::tuple<double, int, int>>> step_result;
 
         // Compute all group combinations
         for (int i = 0; i < A_diag_groups.size(); ++i) {
-            auto A_diag = scheduler.requestGroup(i);
-            auto B_diag = scheduler.requestGroup(i + dram_size);
-            auto A_offsets_local = rebuildOffsets(A_diag);
-            auto B_offsets_local = rebuildOffsets(B_diag);
-            total_cycles += run_test_case(A_offsets_local, B_offsets_local, A_diag, B_diag, step_result, out, Energyout);
+            for (int j = 0; j < B_diag_groups.size(); ++j) {
+                auto A_diag = scheduler.requestGroup(i);
+                auto B_diag = scheduler.requestGroup(j + dram_size);
+                auto A_offsets_local = rebuildOffsets(A_diag);
+                auto B_offsets_local = rebuildOffsets(B_diag);
+                total_cycles += run_test_case(A_offsets_local, B_offsets_local, A_diag, B_diag, step_result, out, Energyout);
+            }
         }
-
+        //Print Cache stats after each multiplication
+        cache.printStats();
         // For next iteration, the current result becomes this step's result
         results = addMissingZeros(step_result, size);
+        //std::string output_filename_partial = "outputs/output_size_" + std::to_string(qubit_size) + "_DBlocked_result_" + std::to_string(k) + ".txt";
+        //saveDiagonalMatrixDense(results, size, output_filename_partial);
+        //bool res = compareMatrices("./outputs/intermediate_ghz_result_10_step_" + std::to_string(k) + ".txt", output_filename_partial, size);
+        // if (!res) {
+        //     std::cerr << "The result of step " << k << " does not match the CPU output.\n";
+        //     return 0;
+        // }
         current_diag = convertDiagonalMap(results, size);
         std::cout << "Finished multiplication with matrix_output_" << k << ".txt\n";
         std::cout << "------------------------------------------"<< std::endl;
     }
 
     // // Optionally: Save the final matrix
-    std::string output_filename = "outputs/output_size_" + std::to_string(qubit_size) + "_Blocked_result.txt";
+    std::string output_filename = "outputs/output_size_" + std::to_string(qubit_size) + "_DBlocked_result.txt";
     saveDiagonalMatrixDense(results, size, output_filename);
-
+    buffer.showCacheStats();
     std::cout << "Finished. Result saved to " << output_filename << "\n";
     std::cout << "Total cycles: " << total_cycles << "\n";
     bool isEqual = compareMatrices("./outputs/final_ghz_result_" + std::to_string(qubit_size) + ".txt", output_filename, size);

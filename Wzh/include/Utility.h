@@ -93,4 +93,7 @@ void saveDiagonalMatrixDense(
 );
 std::unordered_map<int, std::vector<std::tuple<double, int, int>>> convertDiagonalMap(const std::map<int, std::vector<double>>& input, int size);
 bool compareMatrices(const std::string& baselineFile, const std::string& testFile, int size, double epsilon = 1e-6);
+std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>
+splitDiagonals(const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals, int num);
+std::pair<std::map<int, int>, int> splitMatrixDiagonals(int matrixSize, int diagonalsPerGroup);
 #endif // UTILITY_H
