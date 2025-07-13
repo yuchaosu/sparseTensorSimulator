@@ -87,7 +87,7 @@ split_double_diagonals_by_size(
     const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals_B,
     int max_group_size);
 void saveDiagonalMatrixDense(
-    const std::map<int, std::vector<double>>& diagonals,
+    const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& results,
     int size,
     const std::string& filename
 );
@@ -96,4 +96,8 @@ bool compareMatrices(const std::string& baselineFile, const std::string& testFil
 std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>
 splitDiagonals(const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals, int num);
 std::pair<std::map<int, int>, int> splitMatrixDiagonals(int matrixSize, int diagonalsPerGroup);
+std::unordered_map<int, std::vector<std::tuple<double, int, int>>> initializeCdiagGroups(
+    const std::vector<int>& C_offsets,
+    int size  // assuming square matrix N x N
+);
 #endif // UTILITY_H

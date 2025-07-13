@@ -9,19 +9,36 @@
 // GroupData: One group of diagonals
 using GroupData = std::map<int, std::vector<std::tuple<double, int, int>>>;
 
-// DRAMStorage: Simulates DRAM storage
-class DRAMStorage {
+// CycleCounter: Tracks cycles spent
+class CycleCounter {
+private:
+    size_t totalCycles = 0;
+
 public:
-    void store(int groupIndex, const GroupData& data);
-    const GroupData& load(int groupIndex) const;
-    const int size() const { return storage.size(); }
-    std::unordered_map<int, GroupData> getStorage() const { return storage; }
-    void clear() { storage.clear(); }
+    void advance(size_t cycles);
+    size_t get() const;
+    void reset();
+};
+
+// DRAMStorage: Simulates DRAM storage with latency
+class DRAMStorage {
+public: 
+    void initialStore(int groupIndex, const GroupData& data); 
+    void store(int groupIndex, const GroupData& data, CycleCounter& cycleCounter);
+    const GroupData& load(int groupIndex, CycleCounter& cycleCounter) const;
+    const GroupData& showload(int groupIndex) const;
+    void erase(int groupIndex) {
+        storage.erase(groupIndex);
+    }
+    int size() const;
+    std::unordered_map<int, GroupData> getStorage() const;
+    void clear();
+
 private:
     std::unordered_map<int, GroupData> storage;
 };
 
-// SetAssociativeCache: Cache with set-associative policy
+// SetAssociativeCache: Cache with set-associative policy and latency
 class SetAssociativeCache {
 private:
     size_t numSets;
@@ -33,18 +50,18 @@ private:
     };
 
     std::vector<CacheSet> sets;
-    size_t hits;
-    size_t misses;
+    size_t hits = 0;
+    size_t misses = 0;
 
     size_t getSetIndex(int groupIndex) const;
 
 public:
     SetAssociativeCache(size_t numSets, size_t waysPerSet);
 
-    const GroupData* get(int groupIndex, bool& wasHit);
+    const GroupData* get(int groupIndex, bool& wasHit, CycleCounter& cycleCounter);
+    void put(int groupIndex, const GroupData& data, CycleCounter& cycleCounter);
     void clear();
-    void put(int groupIndex, const GroupData& data);
-    void printStats() const;
+    std::pair<int, int> printStats() const;
 };
 
 // TwoLevelBuffer: Combines DRAM and cache
@@ -52,15 +69,16 @@ class TwoLevelBuffer {
 private:
     DRAMStorage& dram;
     SetAssociativeCache& cache;
+    CycleCounter cycleCounter;
 
 public:
     TwoLevelBuffer(DRAMStorage& dram, SetAssociativeCache& cache);
 
     const GroupData& get(int groupIndex);
     void put(int groupIndex, const GroupData& data);
-    void showCacheStats() const;
+    std::pair<int, int> showCacheStats() const;
     void clear();
-
+    size_t getTotalCycles() const;
 };
 
 // Scheduler: Requests groups and stores results
@@ -73,4 +91,5 @@ public:
 
     const GroupData& requestGroup(int groupIndex);
     void storeGroup(int groupIndex, const GroupData& data);
+    size_t getTotalCycles() const;
 };

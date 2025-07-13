@@ -1,131 +1,173 @@
 #include "../include/Cache.h"
-#include <iomanip>
+#include <stdexcept>
 
+// =============================
+// CycleCounter
+// =============================
+
+void CycleCounter::advance(size_t cycles) {
+    totalCycles += cycles;
+}
+
+size_t CycleCounter::get() const {
+    return totalCycles;
+}
+
+void CycleCounter::reset() {
+    totalCycles = 0;
+}
+
+// =============================
 // DRAMStorage
-void DRAMStorage::store(int groupIndex, const GroupData& data) {
+// =============================
+void DRAMStorage::initialStore(int groupIndex, const GroupData& data) {
     storage[groupIndex] = data;
 }
 
-const GroupData& DRAMStorage::load(int groupIndex) const {
+void DRAMStorage::store(int groupIndex, const GroupData& data, CycleCounter& cycleCounter) {
+    storage[groupIndex] = data;
+    cycleCounter.advance(20); // DRAM write latency
+}
+
+const GroupData& DRAMStorage::load(int groupIndex, CycleCounter& cycleCounter) const {
     auto it = storage.find(groupIndex);
     if (it == storage.end()) {
-        throw std::out_of_range("DRAM: Group index not found!");
+        throw std::runtime_error("DRAM load: group not found");
+    }
+    cycleCounter.advance(20); // DRAM read latency
+    return it->second;
+}
+
+const GroupData& DRAMStorage::showload(int groupIndex) const {
+    auto it = storage.find(groupIndex);
+    if (it == storage.end()) {
+        throw std::runtime_error("DRAM showload: group not found");
     }
     return it->second;
 }
 
-// SetAssociativeCache
-SetAssociativeCache::SetAssociativeCache(size_t numSets, size_t waysPerSet)
-    : numSets(numSets), waysPerSet(waysPerSet), sets(numSets), hits(0), misses(0) {}
-
-size_t SetAssociativeCache::getSetIndex(int groupIndex) const {
-    return groupIndex % numSets;
+int DRAMStorage::size() const {
+    return static_cast<int>(storage.size());
 }
 
-const GroupData* SetAssociativeCache::get(int groupIndex, bool& wasHit) {
-    size_t idx = getSetIndex(groupIndex);
-    auto& set = sets[idx];
+std::unordered_map<int, GroupData> DRAMStorage::getStorage() const {
+    return storage;
+}
+
+void DRAMStorage::clear() {
+    storage.clear();
+}
+
+// =============================
+// SetAssociativeCache
+// =============================
+
+SetAssociativeCache::SetAssociativeCache(size_t numSets_, size_t waysPerSet_)
+    : numSets(numSets_), waysPerSet(waysPerSet_), sets(numSets_) {}
+
+size_t SetAssociativeCache::getSetIndex(int groupIndex) const {
+    return static_cast<size_t>(groupIndex) % numSets;
+}
+
+const GroupData* SetAssociativeCache::get(int groupIndex, bool& wasHit, CycleCounter& cycleCounter) {
+    size_t setIdx = getSetIndex(groupIndex);
+    auto& set = sets[setIdx];
+
     auto it = set.entries.find(groupIndex);
-    //printStats();
-    if (it == set.entries.end()) {
-        ++misses;
-        wasHit = false;
-        std::cout << "Cache miss for group index: " << groupIndex << "\n";
-        return nullptr;
-    } else {
-        ++hits;
+    if (it != set.entries.end()) {
+        // HIT
         wasHit = true;
-        // Update LRU
+        hits++;
         set.lruList.erase(it->second.second);
         set.lruList.push_front(groupIndex);
         it->second.second = set.lruList.begin();
-        return &it->second.first;
-    }
-}
-
-void SetAssociativeCache::put(int groupIndex, const GroupData& data) {
-    size_t idx = getSetIndex(groupIndex);
-    auto& set = sets[idx];
-    auto it = set.entries.find(groupIndex);
-
-    if (it != set.entries.end()) {
-        // Update existing
-        set.lruList.erase(it->second.second);
-        set.lruList.push_front(groupIndex);
-        it->second = {data, set.lruList.begin()};
+        cycleCounter.advance(1); // Cache hit latency
+        return &(it->second.first);
     } else {
-        if (set.entries.size() >= waysPerSet) {
-            int lruGroup = set.lruList.back();
-            set.lruList.pop_back();
-            set.entries.erase(lruGroup);
-        }
-        set.lruList.push_front(groupIndex);
-        set.entries[groupIndex] = {data, set.lruList.begin()};
+        // MISS
+        wasHit = false;
+        misses++;
+        cycleCounter.advance(5); // Cache miss lookup latency
+        return nullptr;
     }
 }
 
-void SetAssociativeCache::printStats() const {
-    std::cout << "Cache Hits: " << hits << " Misses: " << misses << "\n";
-    //print cache contents
-    // std::cout << "+-------+----------------+\n";
-    // std::cout << "| Set # |  Group Indices |\n";
-    // std::cout << "+-------+----------------+\n";
+void SetAssociativeCache::put(int groupIndex, const GroupData& data, CycleCounter& cycleCounter) {
+    size_t setIdx = getSetIndex(groupIndex);
+    auto& set = sets[setIdx];
 
-    // for (size_t i = 0; i < sets.size(); ++i) {
-    //     std::cout << "|  " << std::setw(3) << i << "   | ";
+    if (set.entries.find(groupIndex) != set.entries.end()) {
+        set.lruList.erase(set.entries[groupIndex].second);
+    } else if (set.entries.size() >= waysPerSet) {
+        int evictIndex = set.lruList.back();
+        set.lruList.pop_back();
+        set.entries.erase(evictIndex);
+    }
 
-    //     if (sets[i].entries.empty()) {
-    //         std::cout << "(empty)";
-    //     } else {
-    //         bool first = true;
-    //         for (const auto& entry : sets[i].entries) {
-    //             if (!first) std::cout << ", ";
-    //             std::cout << entry.first;
-    //             first = false;
-    //         }
-    //     }
-    //     std::cout << "\n";
-    // }
+    set.lruList.push_front(groupIndex);
+    set.entries[groupIndex] = {data, set.lruList.begin()};
 
-    // std::cout << "+-------+----------------+\n";
+    cycleCounter.advance(1); // Cache write latency
 }
 
 void SetAssociativeCache::clear() {
-    sets = std::vector<CacheSet>(numSets);
+    for (auto& set : sets) {
+        set.entries.clear();
+        set.lruList.clear();
+    }
+    hits = 0;
+    misses = 0;
 }
 
+std::pair<int, int> SetAssociativeCache::printStats() const {
+    std::cout << "Cache stats: Hits=" << hits << ", Misses=" << misses << "\n";
+    return std::make_pair(hits, misses);
+}
+
+// =============================
 // TwoLevelBuffer
-TwoLevelBuffer::TwoLevelBuffer(DRAMStorage& dram, SetAssociativeCache& cache)
-    : dram(dram), cache(cache) {}
+// =============================
+
+TwoLevelBuffer::TwoLevelBuffer(DRAMStorage& dram_, SetAssociativeCache& cache_)
+    : dram(dram_), cache(cache_) {}
 
 const GroupData& TwoLevelBuffer::get(int groupIndex) {
-    bool hit;
-    const GroupData* data = cache.get(groupIndex, hit);
-    if (hit) {
+    bool wasHit;
+    const GroupData* data = cache.get(groupIndex, wasHit, cycleCounter);
+    if (wasHit) {
         return *data;
     } else {
-        const GroupData& loaded = dram.load(groupIndex);
-        cache.put(groupIndex, loaded);
-        return loaded;
+        const GroupData& dramData = dram.load(groupIndex, cycleCounter);
+        cache.put(groupIndex, dramData, cycleCounter);
+        return dramData;
     }
 }
 
 void TwoLevelBuffer::put(int groupIndex, const GroupData& data) {
-    dram.store(groupIndex, data);
-    cache.put(groupIndex, data);
+    dram.store(groupIndex, data, cycleCounter);
+    cache.put(groupIndex, data, cycleCounter);
 }
 
-void TwoLevelBuffer::showCacheStats() const {
-    cache.printStats();
+std::pair<int, int> TwoLevelBuffer::showCacheStats() const {
+    return cache.printStats();
 }
 
 void TwoLevelBuffer::clear() {
     dram.clear();
     cache.clear();
+    cycleCounter.reset();
 }
+
+size_t TwoLevelBuffer::getTotalCycles() const {
+    return cycleCounter.get();
+}
+
+// =============================
 // Scheduler
-Scheduler::Scheduler(TwoLevelBuffer& buffer)
-    : buffer(buffer) {}
+// =============================
+
+Scheduler::Scheduler(TwoLevelBuffer& buffer_)
+    : buffer(buffer_) {}
 
 const GroupData& Scheduler::requestGroup(int groupIndex) {
     return buffer.get(groupIndex);
@@ -133,4 +175,8 @@ const GroupData& Scheduler::requestGroup(int groupIndex) {
 
 void Scheduler::storeGroup(int groupIndex, const GroupData& data) {
     buffer.put(groupIndex, data);
+}
+
+size_t Scheduler::getTotalCycles() const {
+    return buffer.getTotalCycles();
 }

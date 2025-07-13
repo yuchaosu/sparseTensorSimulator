@@ -681,7 +681,7 @@ split_double_diagonals_by_size(
 
 
 void saveDiagonalMatrixDense(
-    const std::map<int, std::vector<double>>& diagonals,
+    const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& results,
     int size,
     const std::string& filename
 ) {
@@ -696,20 +696,11 @@ void saveDiagonalMatrixDense(
     // Create an empty matrix initialized to zeros
     std::vector<std::vector<double>> dense(size, std::vector<double>(size, 0.0));
 
-    // Fill in the nonzero elements from the diagonals
-    for (const auto& [diagIndex, values] : diagonals) {
-        int d = diagIndex;
-        for (size_t k = 0; k < values.size(); ++k) {
-            int i, j;
-            if (d >= 0) {
-                i = k;
-                j = k + d;
-            } else {
-                i = k - d;
-                j = k;
-            }
+    // Fill in the nonzero elements
+    for (const auto& [offset, entries] : results) {
+        for (const auto& [value, i, j] : entries) {
             if (i >= 0 && i < size && j >= 0 && j < size) {
-                dense[i][j] = values[k];
+                dense[i][j] = value;
             }
         }
     }
@@ -724,6 +715,7 @@ void saveDiagonalMatrixDense(
 
     out.close();
 }
+
 
 std::unordered_map<int, std::vector<std::tuple<double, int, int>>> convertDiagonalMap(
     const std::map<int, std::vector<double>>& input,
@@ -804,11 +796,11 @@ bool compareMatrices(
         while (baseStream >> baseVal && testStream >> testVal) {
             double diff = std::abs(baseVal - testVal);
             if (diff > epsilon) {
-                // std::cout << "Mismatch at (" << row << "," << col << "): "
-                //           << "baseline=" << baseVal
-                //           << " test=" << testVal
-                //           << " diff=" << diff
-                //           << std::endl;
+                std::cout << "Mismatch at (" << row << "," << col << "): "
+                          << "baseline=" << baseVal
+                          << " test=" << testVal
+                          << " diff=" << diff
+                          << std::endl;
                 allMatched = false;
             }
             ++col;
@@ -932,4 +924,29 @@ splitMatrixDiagonals(
 
     int numGroups = currentGroup + 1;
     return {result, numGroups};
+}
+
+std::unordered_map<int, std::vector<std::tuple<double, int, int>>>
+initializeCdiagGroups(
+    const std::vector<int>& C_offsets,
+    int size  // assuming square matrix N x N
+) {
+    std::unordered_map<int, std::vector<std::tuple<double, int, int>>> C_diag_groups;
+
+    for (int offset : C_offsets) {
+        std::vector<std::tuple<double, int, int>> diagonalElements;
+        int d = offset;
+
+        int start_i = std::max(0, -d);
+        for (int i = start_i; i < size; ++i) {
+            int j = i + d;
+            if (j < 0 || j >= size)
+                break;
+            diagonalElements.emplace_back(0.0, i, j);
+        }
+
+        C_diag_groups[d] = std::move(diagonalElements);
+    }
+
+    return C_diag_groups;
 }
