@@ -345,10 +345,10 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Starting chained multiplication of " << qubit_size << " matrices.\n";
 
-    std::ofstream out("outputs/" + std::to_string(qubit_size) + "/output_" + std::to_string(grid_row) + "x" + std::to_string(grid_col) + "_DBlocked.log");
-    std::ofstream Energyout("outputs/" + std::to_string(qubit_size) + "/output_" + std::to_string(grid_row) + "x" + std::to_string(grid_col) + "_DBlocked.power");
+    std::ofstream out("/mnt/beegfs/ysu34/" + std::to_string(qubit_size) + "/output_" + std::to_string(grid_row) + "x" + std::to_string(grid_col) + "_DBlocked.log");
+    std::ofstream Energyout("/mnt/beegfs/ysu34/" + std::to_string(qubit_size) + "/output_" + std::to_string(grid_row) + "x" + std::to_string(grid_col) + "_DBlocked.power");
 
-    std::string basePath = "./outputs/" + std::to_string(qubit_size) + "/";
+    std::string basePath = "/mnt/beegfs/ysu34/" + std::to_string(qubit_size) + "/";
 
     // Load the first matrix
     std::string filenameA = basePath + "matrix_output_1.txt";
