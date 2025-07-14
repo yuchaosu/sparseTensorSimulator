@@ -453,17 +453,17 @@ std::vector<int> rebuildOffsets(const std::map<int, std::vector<std::tuple<doubl
     for (const auto& [offset, _] : diagonals) {
         offsets.push_back(offset);
     }
-    std::cout << "Rebuilt offsets: ";
-    for (int offset : offsets) {
-        std::cout << offset << " ";
-    }
-    std::cout << std::endl;
-    std::sort(offsets.begin(), offsets.end());
-    std::cout << "Sorted offsets: ";
-    for (int offset : offsets) {
-        std::cout << offset << " ";
-    }
-    std::cout << std::endl;
+    // std::cout << "Rebuilt offsets: ";
+    // for (int offset : offsets) {
+    //     std::cout << offset << " ";
+    // }
+    // std::cout << std::endl;
+    // std::sort(offsets.begin(), offsets.end());
+    // std::cout << "Sorted offsets: ";
+    // for (int offset : offsets) {
+    //     std::cout << offset << " ";
+    // }
+    // std::cout << std::endl;
     return offsets;
 }
 

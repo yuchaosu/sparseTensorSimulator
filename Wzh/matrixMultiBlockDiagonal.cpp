@@ -530,12 +530,12 @@ int main(int argc, char* argv[]) {
     }
 
     // // Optionally: Save the final matrix
-    std::string output_filename = "outputs/output_size_" + std::to_string(qubit_size) + "_DBlocked_result.txt";
-    saveDiagonalMatrixDense(results, size, output_filename);
+    //std::string output_filename = "outputs/output_size_" + std::to_string(qubit_size) + "_DBlocked_result.txt";
+    //saveDiagonalMatrixDense(results, size, output_filename);
     std::pair<int, int> hit = buffer.showCacheStats();
     out << "Total cycles: " << total_cycles << "\n";
     out << "Cache Hits: " << hit.first << ", Cache Misses: " << hit.second << "\n";
-    std::cout << "Finished. Result saved to " << output_filename << "\n";
+    std::cout << "Finished.\n";
     std::cout << "Total cycles: " << total_cycles << "\n";
     size_t mem_cycles = buffer.getTotalCycles();
     std::cout << "Mem Cycles: " << mem_cycles << "\n";
