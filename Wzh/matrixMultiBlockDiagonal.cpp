@@ -499,11 +499,13 @@ int main(int argc, char* argv[]) {
         }
         size_A = C_diag_groups.size();
         //print C_offsets
-        // std::cout << "C_offsets after step " << k << ": ";
-        // for (const auto& offset : C_offsets) {
-        //     std::cout << offset << " ";
-        // }
-        // std::cout << "\n";
+        std::cout << "C_offsets size after step " << k << ": " << C_offsets.size() << "\n";
+        std::cout << "C_offsets after step " << k << ": ";
+        for (const auto& offset : C_offsets) {
+            std::cout << offset << " ";
+        }
+        std::cout << "\n";
+        
         //print DRAM storage
         // std::cout << "Current DRAM storage:\n";
         // storage = dram.getStorage();
