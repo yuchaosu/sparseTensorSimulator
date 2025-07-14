@@ -23,29 +23,6 @@ TwoLevelBuffer buffer(dram, cache);
 // Scheduler
 Scheduler scheduler(buffer);
 
-
-
-int getA_baseIndex(int k, int result_index_end, int stride, int maxA, int maxB) {
-    if (k==0) {
-        return result_index_end + 1 + k * stride;
-    } else {
-        int prev_base = result_index_end + 1 + (k-1)*stride;
-        return prev_base + maxA + maxB;
-    }
-}
-
-// Returns the DRAM base index of B in current step
-int getB_baseIndex(int k, int result_index_end, int stride, int maxA) {
-    int base = result_index_end + 1 + k*stride;
-    return base + maxA;
-}
-
-// Returns the DRAM base index of C in current step
-int getC_baseIndex(int k, int result_index_end, int stride, int maxA, int maxB) {
-    int base = result_index_end + 1 + k*stride;
-    return base + maxA + maxB;
-}
-
 std::vector<std::vector<int>> generateReductionMap(
     const std::vector<int>& A_offsets,
     const std::vector<int>& B_offsets,
@@ -269,13 +246,13 @@ int run_test_case( const std::vector<int>& A_offsets, const std::vector<int>& B_
     
     GroupData result = grid.getResults();
     //print C_offset_to_group
-    std::cout << "C_offset_to_group:\n";
-    for (const auto& [offset, group] : C_offset_to_group) {
-        std::cout << "Offset: " << offset << ", Group: " << group << "\n";
-    }
+    // std::cout << "C_offset_to_group:\n";
+    // for (const auto& [offset, group] : C_offset_to_group) {
+    //     std::cout << "Offset: " << offset << ", Group: " << group << "\n";
+    // }
     for (const auto& [offset, entries] : result) {
-        std::cout << "Processing offset: " << offset << "\n";
-        std::cout << "Fetch group index: " << C_offset_to_group.at(offset) + C_base<< "\n";
+        // std::cout << "Processing offset: " << offset << "\n";
+        // std::cout << "Fetch group index: " << C_offset_to_group.at(offset) + C_base<< "\n";
         GroupData groupData = scheduler.requestGroup(C_offset_to_group.at(offset) + C_base);
         for (const auto& [value, i, j] : entries) {
             for (auto& [val, row, col] : groupData[offset]) {
@@ -400,7 +377,7 @@ int main(int argc, char* argv[]) {
     std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> C_diag_groups;
     int C_base;
     std::unordered_map<int, std::vector<std::tuple<double, int, int>>> results;
-    for (int k = 2; k <= 10; ++k) {
+    for (int k = 2; k <= qubit_size; ++k) {
         std::cout << "Multiplying matrix_output_" << (k-1) << ".txt by matrix_output_" << k << ".txt\n";
         
          // Load next B
@@ -416,10 +393,10 @@ int main(int argc, char* argv[]) {
             C_offsets = computeResultDiagonals(C_offsets, B_offsets, size);
         }
         //print C_offsets
-        for (const auto& offset : C_offsets) {
-            std::cout << offset << " ";
-        }
-        std::cout << "\n";
+        // for (const auto& offset : C_offsets) {
+        //     std::cout << offset << " ";
+        // }
+        // std::cout << "\n";
         auto C_diag = initializeCdiagGroups(C_offsets, size);
         C_diag_groups = splitDiagonals(C_diag, grid_col);
         std::unordered_map<int, int> C_offset_to_group = createOffsetToGroupMap(C_diag_groups);
@@ -448,14 +425,14 @@ int main(int argc, char* argv[]) {
             dram.initialStore(C_base + groupIndex, groupData);
         }
 
-        std::cout << "Current DRAM storage:\n";
-        auto storage = dram.getStorage();
-        for (const auto& [groupIndex, groupData] : storage) {
-            std::cout << "Group " << groupIndex << ": \n";
-            for (const auto& [offset, entries] : groupData) {
-                std::cout << "Offset " << offset << "\n";
-            }
-        }
+        // std::cout << "Current DRAM storage:\n";
+        // auto storage = dram.getStorage();
+        // for (const auto& [groupIndex, groupData] : storage) {
+        //     std::cout << "Group " << groupIndex << ": \n";
+        //     for (const auto& [offset, entries] : groupData) {
+        //         std::cout << "Offset " << offset << "\n";
+        //     }
+        // }
 
         // Prepare accumulator
         std::map<int, std::vector<std::tuple<double, int, int>>> step_result;
@@ -484,14 +461,14 @@ int main(int argc, char* argv[]) {
                 );
             }
         }
-        std::cout << "Current DRAM storage:\n";
-        storage = dram.getStorage();
-        for (const auto& [groupIndex, groupData] : storage) {
-            std::cout << "Group " << groupIndex << ": \n";
-            for (const auto& [offset, entries] : groupData) {
-                std::cout << "Offset " << offset << "\n";
-            }
-        }
+        // std::cout << "Current DRAM storage:\n";
+        // storage = dram.getStorage();
+        // for (const auto& [groupIndex, groupData] : storage) {
+        //     std::cout << "Group " << groupIndex << ": \n";
+        //     for (const auto& [offset, entries] : groupData) {
+        //         std::cout << "Offset " << offset << "\n";
+        //     }
+        // }
         
         C_offsets.clear();
         results.clear();
@@ -522,20 +499,20 @@ int main(int argc, char* argv[]) {
         }
         size_A = C_diag_groups.size();
         //print C_offsets
-        std::cout << "C_offsets after step " << k << ": ";
-        for (const auto& offset : C_offsets) {
-            std::cout << offset << " ";
-        }
-        std::cout << "\n";
+        // std::cout << "C_offsets after step " << k << ": ";
+        // for (const auto& offset : C_offsets) {
+        //     std::cout << offset << " ";
+        // }
+        // std::cout << "\n";
         //print DRAM storage
-        std::cout << "Current DRAM storage:\n";
-        storage = dram.getStorage();
-        for (const auto& [groupIndex, groupData] : storage) {
-            std::cout << "Group " << groupIndex << ": \n";
-            for (const auto& [offset, entries] : groupData) {
-                std::cout << "Offset " << offset << "\n";
-            }
-        }
+        // std::cout << "Current DRAM storage:\n";
+        // storage = dram.getStorage();
+        // for (const auto& [groupIndex, groupData] : storage) {
+        //     std::cout << "Group " << groupIndex << ": \n";
+        //     for (const auto& [offset, entries] : groupData) {
+        //         std::cout << "Offset " << offset << "\n";
+        //     }
+        // }
         //Print Cache stats after each multiplication
         cache.printStats();
         // For next iteration, the current result becomes this step's result
@@ -560,12 +537,15 @@ int main(int argc, char* argv[]) {
     out << "Cache Hits: " << hit.first << ", Cache Misses: " << hit.second << "\n";
     std::cout << "Finished. Result saved to " << output_filename << "\n";
     std::cout << "Total cycles: " << total_cycles << "\n";
+    size_t mem_cycles = buffer.getTotalCycles();
+    std::cout << "Mem Cycles: " << mem_cycles << "\n";
+    out << "Mem Cycles:" << mem_cycles << "\n";
     //bool isEqual = compareMatrices("./outputs/final_ghz_result_" + std::to_string(qubit_size) + ".txt", output_filename, size);
     //bool isEqual = compareMatrices("./outputs/intermediate_ghz_result_10_step_3.txt", output_filename, size);
     //if (isEqual) {
     //    std::cout << "The final result matches the CPU output.\n";
     //} else {
-        std::cout << "The final result does not match the CPU output.\n";
+    //    std::cout << "The final result does not match the CPU output.\n";
     //}
     #endif
     return 0;
