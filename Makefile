@@ -1,49 +1,56 @@
-CXX=g++
-CXXFLAGS= -std=c++17 -O3 -Iinclude/ -Iexternal/ #-ltcmalloc  -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free
-#DEBUGFLAGS= -O0 -g
-#DEBUGFLAGS=-D DEBUG_MEM_OUTPUT -D DEBUG_MSWITCH_FUNC
-#-D DEBUG_MEM_OUTPUT -D DEBUG_MEM_INPUT -D DEBUG_ASWITCH_CONFIG -D DEBUG_ASWITCH_FUNC -D DEBUG_MSWITCH_CONFIG -D DEBUG_MSWITCH_FUNC
-BIN = stonne
+CXX = g++
+CXXFLAGS = -std=c++17 -O3 -Iinclude/ -Iexternal/
+# Uncomment for debugging
+#DEBUGFLAGS = -O0 -g
+#DEBUGFLAGS = -DDEBUG_MEM_OUTPUT -DDEBUG_MSWITCH_FUNC
 
-SOURCE =   $(wildcard src/*.cpp) \
-           $(wildcard src/TileGenerator/*.cpp) \
-           $(wildcard src/TileGenerator/mRNA/*.cpp) \
-           $(wildcard src/TileGenerator/StonneMapper/*.cpp) \
-           $(wildcard src/TileGenerator/Utils/*.cpp)
+# Executable names (without paths)
+BINARIES = matrixMulti matrixMultiBlock matrixMultiBlockDiagonal matrixMultiHam
 
-INCLUDES = $(wildcard include/*.h) \
-		   $(wildcard include/TileGenerator/*.h) \
-		   $(wildcard include/TileGenerator/mRNA/*.h) \
-		   $(wildcard include/TileGenerator/StonneMapper/*.h) \
-		   $(wildcard include/TileGenerator/Utils/*.h)
+# All shared .cpp sources in src/
+COMMON_SOURCES = $(wildcard src/*.cpp)
 
+# All headers
+INCLUDES = $(wildcard include/*.h)
+
+# Object directory
 OBJSDIR = objs
-OBJS = $(patsubst src/%, $(OBJSDIR)/%, $(patsubst %.cpp,%.o,$(SOURCE)))
 
+# Output directory for executables
+OUTDIR = outputs
 
+# Common objects
+COMMON_OBJS = $(patsubst src/%, $(OBJSDIR)/%, $(patsubst %.cpp,%.o,$(COMMON_SOURCES)))
 
+.PHONY: all clean $(BINARIES)
 
+# Default target: build everything
+all: $(BINARIES)
 
-all: $(BIN) diagonal_test
+# matrixMulti: link main source
+matrixMulti: $(COMMON_OBJS)
+	@mkdir -p $(OUTDIR)
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) matrixMulti.cpp
 
-$(BIN): $(OBJSDIR) $(OBJS)
-	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS)  -o $@ $(OBJS)  #-pthread -ltcmalloc
+# matrixMultiBlock: link main source
+matrixMultiBlock: $(COMMON_OBJS)
+	@mkdir -p $(OUTDIR)
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) matrixMultiBlock.cpp
 
-diagonal_test: $(OBJSDIR) $(filter-out $(OBJSDIR)/main.o, $(OBJS)) $(OBJSDIR)/diagonal_test.o
-	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $@ $(filter-out $(OBJSDIR)/main.o $(OBJSDIR)/diagonal_test.o, $(OBJS)) $(OBJSDIR)/diagonal_test.o
+matrixMultiBlockDiagonal: $(COMMON_OBJS)
+	@mkdir -p $(OUTDIR)
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) matrixMultiBlockDiagonal.cpp
 
-$(OBJSDIR):
-	mkdir -p $@ && \
-	mkdir -p $@/TileGenerator && \
-	mkdir -p $@/TileGenerator/mRNA && \
-	mkdir -p $@/TileGenerator/StonneMapper && \
-	mkdir -p $@/TileGenerator/Utils
+# matrixMultiHam: link main source
+matrixMultiHam: $(COMMON_OBJS)
+	@mkdir -p $(OUTDIR)
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) matrixMultiplyHam.cpp
 
+# Rule to build .o files from src/
 $(OBJSDIR)/%.o: src/%.cpp $(INCLUDES)
-	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@  #-ltcmalloc
+	@mkdir -p $(OBJSDIR)
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
-.PHONY: clean
+# Clean rule
 clean:
-	rm -rf $(OBJSDIR) && rm -f stonne diagonal_test
-
-
+	rm -rf $(OBJSDIR) $(OUTDIR)

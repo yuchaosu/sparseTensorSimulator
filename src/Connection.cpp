@@ -1,65 +1,188 @@
-//Created 13/06/2019
 
-#include "Connection.h"
+
+#include "../include/Connection.h"
 #include <iostream>
 #include <assert.h>
 
 using namespace std;
 
-Connection::Connection(int bw) { //Constructor
-    this->bw = bw; //Maximum bw allowed in the connection
-    this->current_capacity = 0; 
-    this->pending_data=false;
+Connection::Connection(std::ostream& out) : out(out) {
+    this->pending_src = false;
+    this->pending_psum = false;
+    this->pending_transfer = false;
+    sends = 0;
+    receives = 0;
 }
 
 
-bool Connection::existPendingData() {
-    return this->pending_data;
-}
 
-//Send a package to the interconnection. If there is no remaining bandiwth an exception is raised
-void Connection::send(vector<DataPackage*> data_p) {
-#ifdef DEBUG
-    //Check the connection is not busy
-    assert(pending_data==false);
-    //Check there is enouth bandwidth. This case should not happen so if happens, an assert is raised. 
-    this->current_capacity=0;
-    for(int i=0; i<data_p.size(); i++) {
-        DataPackage* current_package = data_p[i];
-	//Check there is enouth bandwidth. This case should not happen so if happens, an assert is raised
-	assert( (current_package->get_size_package() + this->current_capacity) <= this->bw );   
-	this->current_capacity += current_package->get_size_package(); //Increasing the amount of data in the connection
-    }
-#endif
-    this->data = data_p; //list of pointers assignment. All the vectors are replicated to save a copy and track it.
-    this->pending_data = true;
-    
-    //Tracking parameters
-    this->connectionStats.n_sends+=1;   
-    return; 
+//Send a package to the interconnection. If there is no remaining bandwidth an exception is raised
+void Connection::send() {
+    this->src = src;
+    this->psum = psum;
+    this->transfer = transfer;
+    this->pending_src = false;
+    this->pending_psum = false;
+    this->pending_transfer = false;
+
+    return;
 }
 
 //Return the packages from the interconnection
-vector<DataPackage*> Connection::receive() { 
-    if(this->pending_data) {
-            this->pending_data = false;
-	    return this->data;
+void Connection::receive(DataPackage src, DataPackage psum, DataPackage transfer) {
+    if(this->pending_src) {
+        out << "Connection already has pending src data. Cannot receive new data until the previous is sent." << endl;
+        return;
     }
-    //If there is no pending data
-    data.clear(); //Set the list of elements to return to 0
-    this->pending_data = false;
-    
-    //Tracking parameters
-    this->connectionStats.n_receives+=1;
-  
-    return data; //Return empty list indicating that there is no data
+    this->src = src;
+    this->pending_src = true;
+    if(this->pending_psum) {
+        out << "Connection already has pending psum data. Cannot receive new data until the previous is sent." << endl;
+        return;
+    }
+    this->psum = psum;
+    this->pending_psum = true;
+    if(this->pending_transfer) {
+        out << "Connection already has pending transfer data. Cannot receive new data until the previous is sent." << endl;
+        return;
+    }
+    this->transfer = transfer;
+    this->pending_transfer = true;
 }
 
-void Connection::printEnergy(std::ofstream &out, unsigned int indent, std::string wire_type) {
-    out << wire_type << " WRITE=" << connectionStats.n_sends; //Same line
-    out << " READ=" << connectionStats.n_receives << std::endl;
+void Connection::receiveSrc(DataPackage src) {
+    if(this->pending_src) {
+        out << "Connection already has buffered src data. Cannot receive new data until the previous is sent." << endl;
+        return;
+    }
+    this->src = src;
+    this->pending_src = true;
+    out << "Connection: received src data: " << src.value << ", index1: " << src.index1 << ", index2: " << src.index2 << endl;
+    receives++;
+}
+void Connection::receivePsum(DataPackage psum) {
+    if(this->pending_psum) {
+        out << "Connection already has buffered psum data. Cannot receive new data until the previous is sent." << endl;
+        return;
+    }
+    this->psum = psum;
+    this->pending_psum = true;
+    out << "Connection: received psum data: " << psum.value << ", index1: " << psum.index1 << ", index2: " << psum.index2 << endl;
+    receives++;
 }
 
+void Connection::receiveTransfer(DataPackage transfer) {
+    if(this->pending_transfer) {
+        out << "Connection already has buffered transfer data. Cannot receive new data until the previous is sent." << endl;
+        return;
+    }
+    this->transfer = transfer;
+    this->pending_transfer = true;
+    out << "Connection: received transfer data: " << transfer.value << ", index1: " << transfer.index1 << ", index2: " << transfer.index2 << endl;
+    receives++;
+}
 
+DataPackage Connection::sendSrc() {
+    if (this->pending_src) {
+        this->sends++;
+        this->pending_src = false;
+        return this->src;
+    }
+    else {
+        out << "No pending src data to send." << endl;
+        return DataPackage();  // Return an empty package if no pending data
+    }
+}
 
+DataPackage Connection::sendPsum() {
+    if (this->pending_psum) {
+        this->sends++;
+        this->pending_psum = false;
+        return this->psum;
+    }
+    else {
+        out << "No pending psum data to send." << endl;
+        return DataPackage();  // Return an empty package if no pending data
+    }
+}
 
+DataPackage Connection::sendTransfer() {
+    if (this->pending_transfer) {
+        this->sends++;
+        this->pending_transfer = false;
+        return this->transfer;
+    }
+    else {
+        out << "No pending transfer data to send." << endl;
+        return DataPackage();  // Return an empty package if no pending data
+    }
+}
+
+void Connection::receiveInjectionFinished(bool finished) {
+    if(this->pending_injection_finished) {
+        out << "Connection already has buffered injection finished data. Cannot receive new data until the previous is sent." << endl;
+        return;
+    }
+    this->injection_finished = finished;
+    this->pending_injection_finished = true;
+    out << "Connection: received injection finished data: " << finished << endl;
+    receives++;
+}
+
+bool Connection::isInjectionFinished() {
+    if (this->pending_injection_finished) {
+        this->pending_injection_finished = false;  // Reset after checking
+        return this->injection_finished;
+    }
+    else {
+        out << "No pending injection finished data to check." << endl;
+        return false;  // Return false if no pending data
+    }
+}
+
+bool Connection::pendingInjectionFinished() {
+    return pending_injection_finished;
+}
+
+bool Connection::pendingSrc() {
+    return pending_src;
+}
+
+bool Connection::pendingPsum() {
+    return pending_psum;
+}
+
+bool Connection::pendingTransfer() {
+    return pending_transfer;
+}
+
+void Connection::printEnergy(std::ostream &out) const {
+    out << "Sends=" << sends << "\n"
+        << "Receives=" << receives << endl;
+}
+
+void Connection::receiveHandshakeFinished(bool finished) {
+    if(this->pending_handshake_finished) {
+        out << "Connection already has buffered handshake finished data. Cannot receive new data until the previous is sent." << endl;
+        return;
+    }
+    this->handshake_finished = finished;
+    this->pending_handshake_finished = true;
+    out << "Connection: received handshake finished data: " << finished << endl;
+    receives++;
+}
+
+bool Connection::isHandshakeFinished() {
+    if (this->pending_handshake_finished) {
+        this->pending_handshake_finished = false;  // Reset after checking
+        return this->handshake_finished;
+    }
+    else {
+        out << "No pending handshake finished data to check." << endl;
+        return false;  // Return false if no pending data
+    }
+}
+
+bool Connection::pendingHandshakeFinished() {
+    return pending_handshake_finished;
+}

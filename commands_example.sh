@@ -1,26 +1,31 @@
 ### Standard examples ###
 
-./stonne -SparseGEMM -M=4 -N=4 -K=256 -num_ms=8 -dn_bw=8 -rn_bw=8 -rn_bw=8 -MK_sparsity=80 -KN_sparsity=10 -dataflow=MK_STA_KN_STR -optimize=1
-
-./stonne -CONV -R=3 -S=3 -C=6 -G=1 -K=6 -N=1 -X=20 -Y=20 -T_R=3 -T_S=3 -T_C=1 -T_G=1 -T_K=1 -T_N=1 -T_X_=3 -T_Y_=1 -num_ms=64 -dn_bw=8
-
-./stonne -SparseDense -M=1 -N=8 -K=16 -num_ms=4 -dn_bw=4 -rn_bw=4 -MK_sparsity=50 -T_N=1 -T_K=4 -accumulation_buffer=1
-
-./stonne -DenseGEMM -M=4 -N=4 -K=16 -num_ms=4 -dn_bw=4 -rn_bw=4  -T_N=1 -T_M=1 -T_K=4 -accumulation_buffer=1
-
-./stonne -DenseGEMM -M=4 -N=4 -K=16 -num_ms=4 -dn_bw=4 -rn_bw=4  -T_N=4 -T_M=1 -T_K=1 -accumulation_buffer=1 -rn_type="TEMPORALRN"
-
-./stonne -DenseGEMM -M=4 -N=4 -K=16 -ms_rows=4 -ms_cols=4 -dn_bw=8 -rn_bw=16  -T_N=4 -T_M=1 -T_K=1 -accumulation_buffer=1 -rn_type="TEMPORALRN" -mn_type="OS_MESH" -mem_ctrl="TPU_OS_DENSE"
-
-./stonne -DenseGEMM -M=5 -N=2 -K=2 -ms_rows=4 -ms_cols=4 -dn_bw=8 -rn_bw=16  -T_N=4 -T_M=4 -T_K=1 -accumulation_buffer=1 -rn_type="TEMPORALRN" -mn_type="OS_MESH" -mem_ctrl="TPU_OS_DENSE"
-
-./stonne -SparseDense -M=20 -N=20 -K=256 -MK_sparsity=80 -T_N=4 -T_K=32 -num_ms=128 -dn_bw=64 -rn_bw=64
+./outputs/matrixMultiHam -row=27 -col=606 -set=2 -way=2 -folder='' -qubit=14 -file=''-iter=5
 
 
-### STONNE Mapper examples ###
+python3.11 fetchham.py maxcut/ham-graph-complete_bipart.hdf5 complbipart-n-10_a-5_b-5 
+python3.11 fetchham.py maxcut/ham-graph-regular_reg-3.hdf5 reg-3_n-10_rinst-00 
 
-./stonne -CONV -R=3 -S=3 -C=6 -G=1 -K=6 -N=1 -X=20 -Y=20 -generate_tile=energy -num_ms=64 -dn_bw=8 -rn_bw=8 -accumulation_buffer=1
+python3.11 fetchham.py maxcut/ham-graph-complete_bipart.hdf5 complbipart-n-12_a-6_b-6
+python3.11 fetchham.py maxcut/ham-graph-regular_reg-3.hdf5 reg-3_n-12_rinst-00
 
-./stonne -FC -M=20 -N=20 -K=256 -generate_tile=performance -generator=mRNA -num_ms=256 -dn_bw=64 -rn_bw=64 -accumulation_buffer=1
+python3.11 fetchham.py maxcut/ham-graph-complete_bipart.hdf5 complbipart-n-14_a-7_b-7
+python3.11 fetchham.py maxcut/ham-graph-regular_reg-3.hdf5 reg-3_n-14_rinst-00
 
-./stonne -SparseDense -M=20 -N=20 -K=256 -MK_sparsity=80 -generate_tile=1 -num_ms=128 -dn_bw=64 -rn_bw=64 -accumulation_buffer=1
+
+python3.11 fetchham.py tsp/TSP_penalties.hdf5 tsppenalty_Ncity-4_enc-stdbinary
+python3.11 fetchham.py tsp/TSP_penalties.hdf5 tsppenalty_Ncity-5_enc-stdbinary
+
+python3.11 fetchham.py /heis/heis.hdf5 graph-1D-grid-nonpbc-qubitnodes_Lx-10_h-0
+python3.11 fetchham.py /heis/heis.hdf5 graph-1D-grid-nonpbc-qubitnodes_Lx-10_h-1
+python3.11 fetchham.py /heis/heis.hdf5 graph-1D-grid-nonpbc-qubitnodes_Lx-10_h-2
+
+python3.11 fetchham.py /heis/heis.hdf5 graph-1D-grid-nonpbc-qubitnodes_Lx-12_h-0
+python3.11 fetchham.py /heis/heis.hdf5 graph-1D-grid-nonpbc-qubitnodes_Lx-12_h-0.5
+python3.11 fetchham.py /heis/heis.hdf5 graph-1D-grid-nonpbc-qubitnodes_Lx-12_h-1
+
+python3.11 fetchham.py /heis/heis.hdf5 graph-1D-grid-nonpbc-qubitnodes_Lx-14_h-0
+python3.11 fetchham.py /heis/heis.hdf5 graph-1D-grid-nonpbc-qubitnodes_Lx-14_h-1
+python3.11 fetchham.py /heis/heis.hdf5 graph-1D-grid-nonpbc-qubitnodes_Lx-14_h-2
+
+./outputs/matrixMultiHam -set=2 -way=2 -row=1 -col=1 -iter=4 -file=''

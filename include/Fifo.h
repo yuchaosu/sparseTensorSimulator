@@ -1,31 +1,39 @@
-
-//Created by Francisco Munoz Martinez on 25/06/2019
-
-// This class is used in the simulator in order to limit the size of the fifo.
-
-#ifndef __Fifo_h__
-#define __Fifo_h__
+#ifndef FIFO_H
+#define FIFO_H
 
 #include <queue>
-#include "DataPackage.h"
-#include "types.h"
-#include "Stats.h"
+#include <stdexcept>
 
-class Fifo {
-private:
-    std::queue<DataPackage*> fifo;
-    unsigned int capacity; //Capacity in number of bits
-    unsigned int capacity_words; //Capacity in number of words allowed. i.e., capacity_words = capacity / size_word
-    FifoStats fifoStats; //Tracking parameters
+template<typename T>
+class FIFO {
 public:
-    Fifo(unsigned int capacity);
-    bool isEmpty();
-    bool isFull();
-    void push(DataPackage* data);
-    DataPackage* pop();
-    DataPackage* front();
-    unsigned int size(); //Return the number of elements in the fifo
-    void printStats(std::ofstream& out, unsigned int indent);
-    void printEnergy(std::ofstream& out, unsigned int indent);
+    FIFO(size_t capacity = 20000) : max_capacity(capacity) {}
+
+    bool isFull() const { return buffer.size() >= max_capacity; }
+    bool isEmpty() const { return buffer.empty(); }
+
+    void push(const T& item) {
+        if (isFull()) return; // Optionally throw an exception or handle overflow
+        buffer.push(item);
+    }
+
+    T front() const {
+        if (isEmpty()) throw std::underflow_error("FIFO is empty");
+        return buffer.front();
+    }
+
+    void pop() {
+        if (isEmpty()) throw std::underflow_error("FIFO is empty");
+        buffer.pop();
+    }
+
+    size_t size() const {
+        return buffer.size();
+    }
+
+private:
+    std::queue<T> buffer;
+    size_t max_capacity;
 };
-#endif
+
+#endif // FIFO_H

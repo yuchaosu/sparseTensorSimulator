@@ -9,3 +9,4 @@ Wzh/outputs/
 *.pdf
 *.npy
 .vscode/
+objs/
