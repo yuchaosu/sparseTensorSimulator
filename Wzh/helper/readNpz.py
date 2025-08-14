@@ -4,7 +4,7 @@ import sys
 qubit = int(sys.argv[1])  # Change this to the desired qubit number
 # Load the .npz file
 for index in range(1, qubit+1):  # Change this to the desired index
-    data = np.load('../with_h_data/supermarq/ghz/' + str(qubit) + '/gate_'+ str(index) + '.npz')
+    data = np.load('/mnt/beegfs/ysu34/supermarq/ghz/' + str(qubit) + '/gate_'+ str(index) + '.npz')
 
     # List arrays (keys)
     print("Arrays in file:", data.files)
@@ -18,7 +18,7 @@ for index in range(1, qubit+1):  # Change this to the desired index
     IMAG_EPS = 1e-8
     REAL_EPS = 1e-8
 
-    folder = './outputs/' + str(qubit)
+    folder = '/mnt/beegfs/ysu34/' + str(qubit)
     os.makedirs(folder, exist_ok=True)
 
     filename = os.path.join(folder, 'matrix_output_' + str(index) + '.txt')
@@ -32,7 +32,7 @@ for index in range(1, qubit+1):  # Change this to the desired index
                 # If real part is effectively 0, skip this element
                 if abs(real_part) < REAL_EPS:
                     continue
-
+ 
                 # If imaginary part is effectively 0, print only real
                 if abs(imag_part) < IMAG_EPS:
                     value_str = f"{real_part:.6f}"
@@ -41,5 +41,5 @@ for index in range(1, qubit+1):  # Change this to the desired index
 
                 f.write(f"({i},{j}): {value_str}\n")
 
-    print("Done! Non-zero entries saved to matrix_output.txt")
+    print("Done! Non-zero entries saved to " + filename)
 

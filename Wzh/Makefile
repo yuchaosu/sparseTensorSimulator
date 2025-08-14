@@ -5,7 +5,7 @@ CXXFLAGS = -std=c++17 -O3 -Iinclude/ -Iexternal/
 #DEBUGFLAGS = -DDEBUG_MEM_OUTPUT -DDEBUG_MSWITCH_FUNC
 
 # Executable names (without paths)
-BINARIES = matrixMulti matrixMultiBlock
+BINARIES = matrixMulti matrixMultiBlock matrixMultiBlockDiagonal matrixMultiHam
 
 # All shared .cpp sources in src/
 COMMON_SOURCES = $(wildcard src/*.cpp)
@@ -36,6 +36,15 @@ matrixMulti: $(COMMON_OBJS)
 matrixMultiBlock: $(COMMON_OBJS)
 	@mkdir -p $(OUTDIR)
 	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) matrixMultiBlock.cpp
+
+matrixMultiBlockDiagonal: $(COMMON_OBJS)
+	@mkdir -p $(OUTDIR)
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) matrixMultiBlockDiagonal.cpp
+
+# matrixMultiHam: link main source
+matrixMultiHam: $(COMMON_OBJS)
+	@mkdir -p $(OUTDIR)
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) matrixMultiplyHam.cpp
 
 # Rule to build .o files from src/
 $(OBJSDIR)/%.o: src/%.cpp $(INCLUDES)

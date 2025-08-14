@@ -132,6 +132,7 @@ void PE::cycle() {
             receivedB.pop();
             multiplies++;
             compares++;
+            demux++;
         } else if (valueA.index2 < valueB.index1) {
             out << "PE (" << r << ", " << c << ") Index mismatch, block the large one, B: " << valueB.value << " " << valueB.index1 << " " << valueB.index2 << "\n";
             sendBottom();
@@ -140,6 +141,7 @@ void PE::cycle() {
             #endif
             receivedA.pop();
             compares++;
+            demux++;
         } else if (valueA.index2 > valueB.index1) {
             out << "PE (" << r << ", " << c << ") Index mismatch, block the large one, A: " << valueA.value << " " << valueA.index1 << " " << valueA.index2 << "\n";
             sendRight();
@@ -148,6 +150,7 @@ void PE::cycle() {
             #endif
             receivedB.pop();
             compares++;
+            demux++;
         }
     }
     else if (!receivedB.isEmpty()) {
@@ -189,4 +192,5 @@ void PE::printEnergy(std::ostream& out) const {
     out << "Compares: " << compares << "\n";
     out << "Sends: " << sends << "\n";
     out << "Receives: " << receives << "\n";
+    out << "Demux: " << demux << "\n";
 }

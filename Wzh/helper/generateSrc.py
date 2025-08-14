@@ -20,7 +20,7 @@ import termcolor
 import os
 
 
-DATA_DIR = os.getenv("QSPARSE_BENCHMARKS_WITH_H_DATA", "../with_h_data/")
+DATA_DIR = os.getenv("QSPARSE_BENCHMARKS_WITH_H_DATA", "/mnt/beegfs/ysu34/")
 
 os.system('color')
 def matrix_print01(nparray):
@@ -83,6 +83,39 @@ def get_circ(cir_name, n_qubits):
 # from qiskit.extensions.unitary import UnitaryGate
 from qiskit.circuit.library import UnitaryGate
 from numpy import savez
+import numpy as np
+
+def analyze_matrix_sparsity(matrix: np.ndarray):
+    """
+    Analyze a square matrix and compute:
+    - Number of non-zero elements (NNZ)
+    - Number of non-zero diagonals
+    - Sparsity (% of zero entries)
+
+    Parameters:
+    - matrix: 2D numpy array (square or rectangular)
+
+    Returns:
+    - nnz: int
+    - nonzero_diagonal_count: int
+    - sparsity: float (0.0 to 1.0)
+    """
+    if not isinstance(matrix, np.ndarray):
+        raise TypeError("Input must be a NumPy array")
+
+    nnz = np.count_nonzero(matrix)
+    total = matrix.size
+    sparsity = 1.0 - nnz / total
+
+    # Count non-zero diagonals
+    rows, cols = matrix.shape
+    min_diag = -rows + 1
+    max_diag = cols - 1
+    nonzero_diagonal_count = sum(
+        np.any(np.diag(matrix, k=offset)) for offset in range(min_diag, max_diag + 1)
+    )
+
+    return nnz, nonzero_diagonal_count, sparsity
 
 def write_gates_to_file(circ, n, directory):
     ins_num = 1
@@ -102,7 +135,15 @@ def write_gates_to_file(circ, n, directory):
         # matrix_print01(mat)
         # print()
         savez(directory + '/gate_' + str(ins_num) + '.npz', mat)
+        if ins_num == 1:
+            analyze_matrix_sparsity(mat)
+            print("NNZ: ", analyze_matrix_sparsity(mat)[0])
+            print("Non-zero diagonals: ", analyze_matrix_sparsity(mat)[1])
+            print("Sparsity: ", analyze_matrix_sparsity(mat)[2])
+            break
         ins_num += 1
+
+
 
 import os
 c = sys.argv[1]

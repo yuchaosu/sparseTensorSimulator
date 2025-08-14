@@ -77,6 +77,7 @@ public:
     int compares = 0; // Number of comparisons performed
     int sends = 0; // Number of sends performed
     int receives = 0; // Number of receives performed
+    int demux =0;
 };
 
 #endif // PE_H

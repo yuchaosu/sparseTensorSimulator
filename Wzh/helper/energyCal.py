@@ -4,12 +4,12 @@ import os
 from collections import defaultdict
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: python script.py <energy_area_table_file> <counts_file>")
-        sys.exit(1)
-
-    table_file = sys.argv[1]
-    counts_file = sys.argv[2]
+    # if len(sys.argv) != 3:
+    #     print("Usage: python script.py <energy_area_table_file> <counts_file>")
+    #     sys.exit(1)
+    folder = "/mnt/beegfs/ysu34/"
+    table_file = "energy_table.txt"
+    counts_file = folder + sys.argv[1]
 
     # 1. Read the table file
     op_params = {}
@@ -114,7 +114,7 @@ def main():
 
     # 4. Determine output file name
     base_name = os.path.splitext(counts_file)[0]
-    output_filename = f"{base_name}.power"
+    output_filename = f"{base_name}.energy_report.txt"
 
     with open(output_filename, "w") as f:
         f.writelines(report_lines)
