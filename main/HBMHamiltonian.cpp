@@ -60,6 +60,48 @@ size_t bytesToBursts(size_t bytes) {
     return static_cast<size_t>((bytes + kBurstBytes - 1) / kBurstBytes);
 }
 
+// nnz-aware grouping: partition diagonals into ceil(D/maxPerGroup) groups, each
+// with <= maxPerGroup diagonals (the array column/row bound), balancing total
+// nonzeros per group (longest-processing-time first) so tiles carry similar PE
+// work. Grouping only changes scheduling; the PE dataflow now produces the same
+// result regardless of grouping (verified via -verify).
+std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>
+splitDiagonalsBalanced(
+    const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& diagonals,
+    int maxPerGroup) {
+    using Vec = std::vector<std::tuple<double, int, int>>;
+    std::vector<std::pair<int, Vec>> ds(diagonals.begin(), diagonals.end());
+    std::sort(ds.begin(), ds.end(),
+              [](const auto& a, const auto& b) { return a.second.size() > b.second.size(); });
+
+    const int D = static_cast<int>(ds.size());
+    if (D == 0 || maxPerGroup <= 0) return {};
+    const int G = (D + maxPerGroup - 1) / maxPerGroup;
+
+    std::vector<std::unordered_map<int, Vec>> groups(G);
+    std::vector<size_t> load(G, 0), cnt(G, 0);
+    for (auto& [off, vec] : ds) {
+        int best = -1;
+        size_t bestLoad = SIZE_MAX;
+        for (int g = 0; g < G; ++g) {
+            if (cnt[g] < static_cast<size_t>(maxPerGroup) && load[g] < bestLoad) {
+                bestLoad = load[g];
+                best = g;
+            }
+        }
+        const size_t nnz = vec.size();
+        groups[best][off] = std::move(vec);
+        load[best] += nnz;
+        ++cnt[best];
+    }
+
+    std::map<int, std::unordered_map<int, Vec>> out;
+    for (int g = 0; g < G; ++g) {
+        if (!groups[g].empty()) out[static_cast<int>(out.size())] = std::move(groups[g]);
+    }
+    return out;
+}
+
 // ---- Ground-truth verification helpers (small sizes only) ----
 using DenseMat = std::vector<std::vector<double>>;
 
@@ -592,7 +634,7 @@ int main(int argc, char* argv[]) {
     (void)stride;
     auto B_offsets = A_offsets;
 
-    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> A_diag_groups = splitDiagonals(current_diag, grid_col);
+    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> A_diag_groups = splitDiagonalsBalanced(current_diag, grid_col);
     auto B_diag_groups = A_diag_groups;
     for (const auto& [groupIndex, groupDataRaw] : A_diag_groups) {
         GroupData groupData(groupDataRaw.begin(), groupDataRaw.end());
@@ -632,7 +674,7 @@ int main(int argc, char* argv[]) {
             C_offsets = computeResultDiagonals(C_offsets, B_offsets, size);
         }
         auto C_diag = initializeCdiagGroups(C_offsets, size);
-        C_diag_groups = splitDiagonals(C_diag, grid_col);
+        C_diag_groups = splitDiagonalsBalanced(C_diag, grid_col);
         std::unordered_map<int, int> C_offset_to_group = createOffsetToGroupMap(C_diag_groups);
         std::cout << "A offsets: ";
         for (const auto& offset : A_offsets) {
@@ -762,7 +804,7 @@ int main(int argc, char* argv[]) {
                       << ", mismatches=" << mismatches << ")\n";
         }
 
-        C_diag_groups = splitDiagonals(results, grid_col);
+        C_diag_groups = splitDiagonalsBalanced(results, grid_col);
         // Single write-back of the final C groups to HBM (persist for next iter).
         for (const auto& [groupIndex, groupDataRaw] : C_diag_groups) {
             GroupData groupData(groupDataRaw.begin(), groupDataRaw.end());
