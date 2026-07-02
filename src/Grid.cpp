@@ -9,12 +9,11 @@ Grid::Grid(int rows, int cols, std::vector<DiagonalReduction*>& diagonal_reducti
     for (int i = 0; i < rows; ++i)
         for (int j = 0; j < cols; ++j) {
             pes[i][j] = new PE(i, j, out);
-            // if (i == rows - 1) {
-            //     pes[i][j]->setLastRow(true);  // Set last row flag for the last row PEs
-            // }
-            // if (j == cols - 1) {
-            //     pes[i][j]->setLastCol(true);  // Set last column flag for the last column PEs
-            // }
+            // Boundary PEs drain their pass-through operand instead of forwarding
+            // it to a non-existent neighbour (last col: no right PE; last row:
+            // bottom connects to a DiagonalReduction that only consumes psum).
+            if (i == rows - 1) pes[i][j]->setLastRow(true);
+            if (j == cols - 1) pes[i][j]->setLastCol(true);
         }
 
 

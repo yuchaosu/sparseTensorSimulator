@@ -82,6 +82,9 @@ bool PE::isComputeTraceEnabled() {
 }
 
 
+void PE::setLastRow(bool last) { last_row = last; }
+void PE::setLastCol(bool last) { last_col = last; }
+
 void PE::setTopConnection(Connection* conn) {
     connection_top = conn;
 }
@@ -180,10 +183,18 @@ void PE::receive() {
             out << "PE (" << r << ", " << c << ") received Transfer from top: " << transfer.value << " \t index1: " << transfer.index1 << " \t index2: " << transfer.index2 << "\n";
 
             receives++;
-        
+
 
     }
-    
+
+    // Latch stream-exhaustion tokens: once the top (A) / left (B) stream signals
+    // it is finished, no further operands for this PE will arrive on it.
+    if (connection_top && connection_top->pendingInjectionFinished()) {
+        if (connection_top->isInjectionFinished()) injection_finished_top = true;
+    }
+    if (connection_left && connection_left->pendingInjectionFinished()) {
+        if (connection_left->isInjectionFinished()) injection_finished_left = true;
+    }
 }
 void PE::cycle(uint64_t cycle) {
     idle = true; // Reset idle state at the start of the cycle
@@ -192,63 +203,97 @@ void PE::cycle(uint64_t cycle) {
         idle = false; // If there is any data to process, the PE is not idle
     }
 
+    // Advance a pass-through operand only if it can leave this PE: a boundary PE
+    // drains it (no downstream neighbour); an interior PE needs the downstream
+    // link free (backpressure).
+    const bool topPending  = connection_top  && connection_top->pendingSrc();
+    const bool leftPending = connection_left && connection_left->pendingSrc();
+    const bool canAdvanceA = last_row ? true : (!connection_bottom || !connection_bottom->pendingSrc());
+    const bool canAdvanceB = last_col ? true : (!connection_right  || !connection_right->pendingSrc());
+
     if (!receivedA.isEmpty() && !receivedB.isEmpty()) {
         DataPackage valueA = receivedA.front();
         DataPackage valueB = receivedB.front();
-            if (valueA.index2 == valueB.index1) {
-            DataPackage result = DataPackage(valueA.value * valueB.value, valueA.index1, valueB.index2);
-            PsumOut.push(result);
-            out << "PE (" << r << ", " << c << ") computed multiplication: " << valueA.value << " * " << valueB.value << " = " << result.value << " \t index1: " << valueA.index1 << " \t index2: " << valueB.index2 << "\n";
-            // Emit compute trace (1 multiply -> count as 1 FLOP for multiply; adjust if you count MACs)
-            uint64_t ts_ns = (cycle * 1000000000ULL) / PE::kClockFrequencyHz;
-            if (g_compute_trace_agg_enabled) {
-                g_compute_agg_flops += 1;
-                g_compute_agg_events += 1;
-                if (g_compute_agg_first_ts == 0 || ts_ns < g_compute_agg_first_ts) g_compute_agg_first_ts = ts_ns;
-                if (ts_ns > g_compute_agg_last_ts) g_compute_agg_last_ts = ts_ns;
-            }
-            if (g_compute_trace_enabled && g_compute_trace_fp) {
-                std::fprintf(g_compute_trace_fp, "%llu,%d,%d,COMPUTE,%d,%d,%d,%lld\n",
-                             static_cast<unsigned long long>(ts_ns), r, c, 1, valueA.index1, valueB.index2,
-                             static_cast<long long>(result.value));
-                std::fflush(g_compute_trace_fp);
-            }
-            sendBottom();
-            sendRight();
-            receivedA.pop();
-            receivedB.pop();
-            multiplies++;
-            compares++;
-            demux++;
+        if (valueA.index2 == valueB.index1) {
+            // Match: both operands advance, so both downstream links must be free.
+            if (canAdvanceA && canAdvanceB) {
+                DataPackage result = DataPackage(valueA.value * valueB.value, valueA.index1, valueB.index2);
+                PsumOut.push(result);
+                out << "PE (" << r << ", " << c << ") computed multiplication: " << valueA.value << " * " << valueB.value << " = " << result.value << " \t index1: " << valueA.index1 << " \t index2: " << valueB.index2 << "\n";
+                // Emit compute trace (1 multiply -> count as 1 FLOP for multiply; adjust if you count MACs)
+                uint64_t ts_ns = (cycle * 1000000000ULL) / PE::kClockFrequencyHz;
+                if (g_compute_trace_agg_enabled) {
+                    g_compute_agg_flops += 1;
+                    g_compute_agg_events += 1;
+                    if (g_compute_agg_first_ts == 0 || ts_ns < g_compute_agg_first_ts) g_compute_agg_first_ts = ts_ns;
+                    if (ts_ns > g_compute_agg_last_ts) g_compute_agg_last_ts = ts_ns;
+                }
+                if (g_compute_trace_enabled && g_compute_trace_fp) {
+                    std::fprintf(g_compute_trace_fp, "%llu,%d,%d,COMPUTE,%d,%d,%d,%lld\n",
+                                 static_cast<unsigned long long>(ts_ns), r, c, 1, valueA.index1, valueB.index2,
+                                 static_cast<long long>(result.value));
+                    std::fflush(g_compute_trace_fp);
+                }
+                if (!last_row) sendBottom();
+                if (!last_col) sendRight();
+                receivedA.pop();
+                receivedB.pop();
+                multiplies++;
+                compares++;
+                demux++;
+            } // else: stall until both downstream links are free
         } else if (valueA.index2 < valueB.index1) {
-            out << "PE (" << r << ", " << c << ") Index mismatch, block the large one, B: " << valueB.value << " " << valueB.index1 << " " << valueB.index2 << "\n";
-            sendBottom();
-            #ifdef PARALLEL
-            sendRight();
-            #endif
-            receivedA.pop();
-            compares++;
-            demux++;
-        } else if (valueA.index2 > valueB.index1) {
-            out << "PE (" << r << ", " << c << ") Index mismatch, block the large one, A: " << valueA.value << " " << valueA.index1 << " " << valueA.index2 << "\n";
-            sendRight();
-            #ifdef PARALLEL
-            sendBottom();
-            #endif
-            receivedB.pop();
-            compares++;
-            demux++;
+            // A's contraction index can never match current/future B; advance A.
+            if (canAdvanceA) {
+                out << "PE (" << r << ", " << c << ") Index mismatch, advancing A: " << valueA.value << " " << valueA.index1 << " " << valueA.index2 << "\n";
+                if (!last_row) sendBottom();
+                receivedA.pop();
+                compares++;
+                demux++;
+            }
+        } else { // valueA.index2 > valueB.index1
+            if (canAdvanceB) {
+                out << "PE (" << r << ", " << c << ") Index mismatch, advancing B: " << valueB.value << " " << valueB.index1 << " " << valueB.index2 << "\n";
+                if (!last_col) sendRight();
+                receivedB.pop();
+                compares++;
+                demux++;
+            }
         }
     }
     else if (!receivedB.isEmpty()) {
-        out << "PE (" << r << ", " << c << ") does not receive A\n";
-        sendRight();
-        receivedB.pop();
+        // Only B present. A matching A may still arrive, so STALL — unless the A
+        // stream is exhausted, in which case remaining B can never match here.
+        const bool aExhausted = injection_finished_top && !topPending;
+        if (aExhausted && canAdvanceB) {
+            out << "PE (" << r << ", " << c << ") A stream exhausted, draining B\n";
+            if (!last_col) sendRight();
+            receivedB.pop();
+        }
     }
     else if (!receivedA.isEmpty()) {
-        out << "PE (" << r << ", " << c << ") does not receive B\n";
-        sendBottom();
-        receivedA.pop();
+        // Only A present. Symmetric: stall unless the B stream is exhausted.
+        const bool bExhausted = injection_finished_left && !leftPending;
+        if (bExhausted && canAdvanceA) {
+            out << "PE (" << r << ", " << c << ") B stream exhausted, draining A\n";
+            if (!last_row) sendBottom();
+            receivedA.pop();
+        }
+    }
+
+    // Propagate stream-finished tokens to real downstream neighbours once this
+    // PE has fully drained the corresponding input (all its data forwarded).
+    if (injection_finished_top && receivedA.isEmpty() && !topPending &&
+        !sent_finished_top && !last_row && connection_bottom &&
+        !connection_bottom->pendingInjectionFinished()) {
+        connection_bottom->receiveInjectionFinished(true);
+        sent_finished_top = true;
+    }
+    if (injection_finished_left && receivedB.isEmpty() && !leftPending &&
+        !sent_finished_left && !last_col && connection_right &&
+        !connection_right->pendingInjectionFinished()) {
+        connection_right->receiveInjectionFinished(true);
+        sent_finished_left = true;
     }
 
     sendPsum();
