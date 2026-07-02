@@ -6,8 +6,10 @@
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH -c 2
-#SBATCH --mem=16G
 #SBATCH -t 04:00:00
+# NB: this cluster does not schedule on memory (RealMemory=1), so do NOT add
+# --mem (it fails with "Memory specification can not be satisfied"). Concurrency
+# is bounded by cores (-c) and the array %limit instead.
 
 # One array task = one run from isca/manifest.txt (line = SLURM_ARRAY_TASK_ID+1).
 # Submitted by isca/submit_sweep.sh, which sizes the array to the manifest.
