@@ -209,6 +209,8 @@ public:
         return totalCycles + spillNs;
     }
 
+    double tCK() const { return controller.tCK(); }   // ns per DRAM cycle
+
     void printStats(std::ostream& os) const {
         os << "HBM total simulated time: " << totalCycles << " ns\n";
     }
@@ -698,6 +700,8 @@ int main(int argc, char* argv[]) {
     auto splitG = [balance](const std::unordered_map<int, std::vector<std::tuple<double,int,int>>>& d, int gc) {
         return balance ? splitDiagonalsBalanced(d, gc) : splitDiagonals(d, gc);
     };
+    const std::string csv_path = args.count("csv") ? args["csv"] : "";
+    bool verify_all_pass = true;   // AND of every -verify iteration (true if -verify off)
 
     HBMMemory hbmMemory;
     HBMScheduler scheduler(hbmMemory);
@@ -922,6 +926,7 @@ int main(int argc, char* argv[]) {
             double maxAbsDiff = 0.0;
             long mismatches = 0;
             compareDense(ref, C_scratch.groups(), size, 1e-6, maxAbsDiff, mismatches);
+            if (mismatches != 0) verify_all_pass = false;
             std::cout << "[verify] iter " << k << ": "
                       << (mismatches == 0 ? "PASS" : "FAIL")
                       << " (max_abs_diff=" << maxAbsDiff
@@ -973,8 +978,12 @@ int main(int argc, char* argv[]) {
         << totalStats.bytesWritten << "\n";
     std::cout << "Finished.\n";
     std::cout << "Total cycles: " << total_cycles << "\n";
-    uint64_t mem_cycles = totalStats.cycles;
-    std::cout << "HBM Time: " << mem_cycles << " ns\n";
+    uint64_t mem_cycles = totalStats.cycles;                 // HBM time in ns
+    const double hbm_tCK = hbmMemory.tCK();                  // ns per DRAM cycle
+    const uint64_t hbm_dram_cycles =
+        hbm_tCK > 0.0 ? static_cast<uint64_t>(mem_cycles / hbm_tCK) : 0;
+    std::cout << "HBM Time: " << mem_cycles << " ns  (" << hbm_dram_cycles
+              << " DRAM cycles @ tCK=" << hbm_tCK << " ns)\n";
     double totalBandwidth = 0.0;
     if (mem_cycles > 0) {
         uint64_t totalBytes = totalStats.bytesRead + totalStats.bytesWritten;
@@ -1033,6 +1042,27 @@ int main(int argc, char* argv[]) {
     std::cout << "HBM Channels: " << kNumHBMChannels << " (accelerator-side striping)\n";
 
     std::cout << "Statistics saved to " << folder + output_name + ".power" << "\n";
+
+    // Machine-readable summary row (append to -csv=<path>; header written by caller).
+    if (!csv_path.empty()) {
+        std::ofstream csv(csv_path, std::ios::app);
+        if (csv) {
+            csv << output_name << ',' << qubit_size << ',' << grid_row << ',' << grid_col << ','
+                << iterations << ',' << (reuse ? 1 : 0) << ',' << (ctile ? 1 : 0) << ','
+                << (balance ? 1 : 0) << ','
+                << total_cycles << ','
+                << mem_cycles << ','          // HBM time (ns)
+                << hbm_dram_cycles << ','     // HBM time (DRAM cycles)
+                << totalStats.bytesRead << ',' << totalStats.bytesWritten << ','
+                << std::fixed << std::setprecision(3) << mem_latency_pct << ','
+                << std::setprecision(0) << (scratchpad_peak_bytes / 1024.0) << ','
+                << c_spill_reads << ',' << c_spill_writes << ','
+                << (verify ? (verify_all_pass ? "PASS" : "FAIL") : "n/a") << '\n';
+        } else {
+            std::cerr << "Warning: could not open csv path " << csv_path << "\n";
+        }
+    }
+
     // Disable tracing (if enabled)
     try {
         PE::disableComputeTraceAggregate();
