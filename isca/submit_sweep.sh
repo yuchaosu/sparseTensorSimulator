@@ -53,7 +53,9 @@ N=$(wc -l < "$MAN")
 echo "manifest: $N runs -> $MAN"
 
 # submit array (spread across nodes) + dependent merge
-AID=$(sbatch --parsable --array=0-$((N-1))%64 "$REPO/isca/sweep_array.mpi")
+# Pass the repo path through the environment: inside a batch job $0 points at
+# SLURM's spool copy, so the scripts can't derive it themselves.
+AID=$(sbatch --parsable --export=ALL,SWEEP_REPO="$REPO" --array=0-$((N-1))%64 "$REPO/isca/sweep_array.mpi")
 echo "submitted array job $AID"
-MID=$(sbatch --parsable --dependency=afterany:"$AID" "$REPO/isca/merge_sweep.mpi")
+MID=$(sbatch --parsable --export=ALL,SWEEP_REPO="$REPO" --dependency=afterany:"$AID" "$REPO/isca/merge_sweep.mpi")
 echo "submitted merge job $MID (runs after array). Final CSV: $REPO/isca/sweep_results.csv"

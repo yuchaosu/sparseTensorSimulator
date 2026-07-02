@@ -9,7 +9,8 @@
 # Merge per-task CSV rows (isca/sweep_rows/) into one results file.
 # Runs automatically after the array (submitted with --dependency by submit_sweep.sh).
 set -u
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# $0 points at SLURM's spool copy inside a batch job; take repo from env.
+REPO="${SWEEP_REPO:-/home/ysu34/DIAMOND/sparseTensorSimulator}"
 ROWDIR="$REPO/isca/sweep_rows"
 CSV="$REPO/isca/sweep_results.csv"
 

@@ -14,7 +14,9 @@
 # One array task = one run from isca/manifest.txt (line = SLURM_ARRAY_TASK_ID+1).
 # Submitted by isca/submit_sweep.sh, which sizes the array to the manifest.
 set -u
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# $0 points at SLURM's spool copy inside a batch job, so take the repo path from
+# the environment (exported by submit_sweep.sh), with an absolute fallback.
+REPO="${SWEEP_REPO:-/home/ysu34/DIAMOND/sparseTensorSimulator}"
 MAN="$REPO/isca/manifest.txt"
 BIN="$REPO/outputs/HBMHamiltonian"
 ROWDIR="$REPO/isca/sweep_rows"
