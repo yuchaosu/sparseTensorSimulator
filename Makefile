@@ -7,8 +7,17 @@ CXXFLAGS = -std=c++17 -O3 -Iinclude/ -Iexternal/
 # Executable names (without paths)
 BINARIES = matrixMulti matrixMultiBlock matrixMultiBlockDiagonal matrixMultiHam HBMHamiltonian HBMHamiltonianScheduled HBMHamiltonianPrefetch
 
-# All shared .cpp sources in src/
-COMMON_SOURCES = $(wildcard src/*.cpp)
+# Ramulator 2.1 in-loop DRAM model (SOTA HBM4). The adapter TU must be built as
+# C++20 and linked against libramulator.so; everything else stays C++17.
+RAMULATOR_DIR = external/ramulator2
+RAM_SRC = src/RamulatorHBM.cpp
+RAM_OBJ = $(OBJSDIR)/RamulatorHBM.o
+RAMFLAGS = -std=c++20 -O3 -I$(RAMULATOR_DIR)/src
+RAM_CONFIG = $(abspath config/hbm4_sota.yaml)
+RAMLINK = -L$(RAMULATOR_DIR) -lramulator -Wl,-rpath,$(abspath $(RAMULATOR_DIR))
+
+# All shared .cpp sources in src/ (the Ramulator adapter is built separately as C++20)
+COMMON_SOURCES = $(filter-out $(RAM_SRC),$(wildcard src/*.cpp))
 
 # All headers
 INCLUDES = $(wildcard include/*.h)
@@ -39,17 +48,17 @@ matrixMultiBlock: $(COMMON_OBJS)
 
 matrixMultiBlockDiagonal: $(COMMON_OBJS)
 	@mkdir -p $(OUTDIR)
-	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) matrixMultiBlockDiagonal.cpp
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) main/matrixMultiBlockDiagonal.cpp
 
 # matrixMultiHam: link main source
 matrixMultiHam: $(COMMON_OBJS)
 	@mkdir -p $(OUTDIR)
 	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) main/matrixMultiplyHam.cpp
 
-# HBMHamiltonian: link main source
-HBMHamiltonian: $(COMMON_OBJS)
+# HBMHamiltonian: DRAM modeled by Ramulator 2.1 (SOTA HBM4), linked in-loop
+HBMHamiltonian: $(COMMON_OBJS) $(RAM_OBJ)
 	@mkdir -p $(OUTDIR)
-	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) main/HBMHamiltonian.cpp
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) $(RAM_OBJ) main/HBMHamiltonian.cpp $(RAMLINK)
 
 # HBMHamiltonianScheduled: link main source with scheduling heuristic
 HBMHamiltonianScheduled: $(COMMON_OBJS)
@@ -65,6 +74,11 @@ HBMHamiltonianPrefetch: $(COMMON_OBJS)
 $(OBJSDIR)/%.o: src/%.cpp $(INCLUDES)
 	@mkdir -p $(OBJSDIR)
 	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@
+
+# Ramulator adapter: C++20 + Ramulator headers, config path baked in
+$(RAM_OBJ): $(RAM_SRC) include/RamulatorHBM.h
+	@mkdir -p $(OBJSDIR)
+	$(CXX) $(RAMFLAGS) $(DEBUGFLAGS) -DRAMULATOR_HBM_CONFIG='"$(RAM_CONFIG)"' -c $< -o $@
 
 # Clean rule
 clean:

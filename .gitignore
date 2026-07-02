@@ -2,7 +2,7 @@
 *.o
 *.exe
 objs/
-Wzh/outputs/
+outputs/
 
 # Compiled executables (no extension) produced by the various Makefiles
 a.out
@@ -28,3 +28,4 @@ Wzh/hbm/debug
 
 # ---- Project-specific data dirs ----
 with_h_data/supermarq/ghz/
+external/

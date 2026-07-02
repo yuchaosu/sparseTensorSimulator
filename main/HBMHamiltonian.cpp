@@ -4,6 +4,7 @@
 #include "../include/Utility.h"
 #include "../include/DiagonalReduction.h"
 #include "../include/HBM.h"
+#include "../include/RamulatorHBM.h"
 #include "../include/PE.h"
 
 #include <algorithm>
@@ -211,7 +212,7 @@ private:
         totalCycles = std::max<uint64_t>(totalCycles, controller.getMaxChannelTime());
     }
 
-    HBMController controller;
+    RamulatorHBM controller;   // SOTA HBM4 via Ramulator 2.1 (was homegrown HBMController)
     std::array<uint64_t, kNumHBMChannels> channelHeads;
     uint32_t nextChannel;
     std::unordered_map<int, HBMAllocation> allocations;
@@ -680,10 +681,33 @@ int main(int argc, char* argv[]) {
     std::cout << std::setprecision(6);
     out << "HBM Time:" << mem_cycles << "\n";
     out << "HBM Bytes Read:" << totalStats.bytesRead << ", HB Bytes Written:" << totalStats.bytesWritten << "\n";
+    // ---- Memory-latency fraction of the whole process ----
+    // Accelerator clock assumption: 1 GHz => 1 ns per grid cycle. Change
+    // kAccelClockGHz if the modeled PE array runs at a different frequency.
+    constexpr double kAccelClockGHz = 1.0;
+    const double compute_time_ns = static_cast<double>(total_cycles) / kAccelClockGHz;
+    const double dram_time_ns = static_cast<double>(mem_cycles);
+    // HBMHamiltonian is the SERIAL baseline: it loads, computes, then stores with
+    // no compute/memory overlap, so all DRAM time is exposed and the runtime is
+    // the sum. (Overlap is modeled separately in the prefetch driver.)
+    const double total_time_ns = compute_time_ns + dram_time_ns;
+    const double mem_latency_pct =
+        total_time_ns > 0.0 ? 100.0 * dram_time_ns / total_time_ns : 0.0;
+    std::cout << std::fixed << std::setprecision(9);
+    std::cout << "Compute time: " << compute_time_ns / 1e9 << " s ("
+              << total_cycles << " cycles @ " << kAccelClockGHz << " GHz)\n";
+    std::cout << "DRAM (HBM4) time: " << dram_time_ns / 1e9 << " s (" << mem_cycles << " ns)\n";
+    std::cout << "Total runtime (serial): " << total_time_ns / 1e9 << " s\n";
+    std::cout << std::setprecision(2);
+    std::cout << "Memory-latency percentage: " << mem_latency_pct << " %\n";
+    std::cout.unsetf(std::ios::floatfield);
+    std::cout << std::setprecision(6);
+
     std::cout << "Configuration:\n";
     std::cout << "Qubit Size: " << qubit_size << "\n";
     std::cout << "Grid Size: " << grid_row << "x" << grid_col << "\n";
-    std::cout << "HBM Channels: " << kNumHBMChannels << "\n";
+    std::cout << "DRAM model: Ramulator 2.1, SOTA HBM4 (1 stack, 2.048 TB/s, 64 GB)\n";
+    std::cout << "HBM Channels: " << kNumHBMChannels << " (accelerator-side striping)\n";
 
     std::cout << "Statistics saved to " << folder + output_name + ".power" << "\n";
     // Disable tracing (if enabled)

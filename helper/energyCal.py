@@ -48,7 +48,10 @@ def main():
             separate_counts[op_raw] += count
 
             if op_raw == "receives":
-                energy_counts["sends"] += count
+                # Energy: do NOT fold receives into sends here — receives are
+                # charged their own row below (with the sends energy param).
+                # Folding here AND charging the row double-counted receive energy.
+                # Area/static still pairs send+receive (halved below) as one link.
                 area_static_counts["sends"] += count
             elif op_raw == "sends":
                 energy_counts["sends"] += count

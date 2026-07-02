@@ -30,8 +30,16 @@ labels = []
 for p in measured:
     if p['bytes'] <= 0 or p['time'] <= 0:
         continue
-    oi = p['flops'] / p['bytes'] * 1.5
-    perf_gflops = (p['flops'] / p['time']) / 1e9 * 0.7
+    # A placeholder time (e.g. the historic time_s=1.0 in point.csv) makes the
+    # performance axis meaningless. Refuse to plot fabricated points.
+    if p['time'] == 1.0:
+        raise ValueError(
+            f"roofline.py: point '{p['label']}' has time_s == 1.0, which looks "
+            f"like a placeholder. Populate real simulator times before plotting.")
+    # Plot the MEASURED values directly. (Previously these were scaled by
+    # oi*=1.5 and perf*=0.7 with no justification — that manipulated the data.)
+    oi = p['flops'] / p['bytes']
+    perf_gflops = (p['flops'] / p['time']) / 1e9
     OI.append(oi)
     perf.append(perf_gflops)
     labels.append(p['label'])
@@ -86,8 +94,9 @@ for i, lab in enumerate(labels):
 ax.set_xscale('log')
 ax.set_yscale('log')
 
-# Set limits AFTER plotting
-ax.set_xlim(0, 100)
+# Set limits AFTER plotting. NB: a lower x-limit of 0 is invalid on a log axis
+# (matplotlib warns and clamps); use a small positive bound instead.
+ax.set_xlim(0.1, 100)
 ax.set_ylim(30, 1100)
 
 # Set ticks AFTER limits

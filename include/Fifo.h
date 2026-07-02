@@ -13,7 +13,13 @@ public:
     bool isEmpty() const { return buffer.empty(); }
 
     void push(const T& item) {
-        if (isFull()) return; // Optionally throw an exception or handle overflow
+        // A silent drop here would corrupt results with no diagnostic (missing
+        // operands => missing products). Fail loudly instead so an undersized
+        // FIFO can never masquerade as a correct run. Raise max_capacity (or add
+        // real backpressure) if this fires on a legitimate workload.
+        if (isFull()) {
+            throw std::overflow_error("FIFO overflow: capacity exceeded (results would be wrong)");
+        }
         buffer.push(item);
     }
 
