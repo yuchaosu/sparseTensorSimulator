@@ -60,6 +60,49 @@ size_t bytesToBursts(size_t bytes) {
     return static_cast<size_t>((bytes + kBurstBytes - 1) / kBurstBytes);
 }
 
+// ---- Ground-truth verification helpers (small sizes only) ----
+using DenseMat = std::vector<std::vector<double>>;
+
+template <typename DiagMap>
+void fillDense(DenseMat& M, const DiagMap& diag, int n) {
+    for (const auto& [off, entries] : diag) {
+        for (const auto& [v, i, j] : entries) {
+            if (i >= 0 && i < n && j >= 0 && j < n) M[i][j] = v;
+        }
+    }
+}
+
+DenseMat denseMatMul(const DenseMat& A, const DenseMat& B, int n) {
+    DenseMat C(n, std::vector<double>(n, 0.0));
+    for (int i = 0; i < n; ++i) {
+        for (int k = 0; k < n; ++k) {
+            const double a = A[i][k];
+            if (a == 0.0) continue;
+            const double* brow = B[k].data();
+            double* crow = C[i].data();
+            for (int j = 0; j < n; ++j) crow[j] += a * brow[j];
+        }
+    }
+    return C;
+}
+
+// Compare a dense reference against the simulator's C scratchpad. Returns the
+// max absolute difference and counts entries that disagree beyond tol.
+void compareDense(const DenseMat& ref, const std::map<int, GroupData>& C_scratch,
+                  int n, double tol, double& maxAbsDiff, long& mismatches) {
+    DenseMat sim(n, std::vector<double>(n, 0.0));
+    for (const auto& [gidx, gd] : C_scratch) fillDense(sim, gd, n);
+    maxAbsDiff = 0.0;
+    mismatches = 0;
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            double d = std::abs(sim[i][j] - ref[i][j]);
+            if (d > maxAbsDiff) maxAbsDiff = d;
+            if (d > tol) ++mismatches;
+        }
+    }
+}
+
 struct HBMAllocation {
     uint32_t channel = 0;
     uint64_t channelBase = 0;
@@ -490,6 +533,10 @@ int main(int argc, char* argv[]) {
     int grid_col = args.count("col") ? std::stoi(args["col"]) : 8;
     int iterations = args.count("iter") ? std::stoi(args["iter"]) : 1;
     std::string folder = args.count("folder") ? args["folder"] : "";
+    // Ground-truth verification: compare each iteration's C against a dense
+    // matrix power. Only enabled on small matrices (O(size^3) per iteration).
+    bool verify = args.count("verify") ? std::stoi(args["verify"]) != 0 : false;
+    const int kVerifyMaxSize = 4096;  // qubit <= 12
 
     HBMMemory hbmMemory;
     HBMScheduler scheduler(hbmMemory);
@@ -521,6 +568,21 @@ int main(int argc, char* argv[]) {
     std::string filenameA = basePath + filename;
     std::vector<int> A_offsets = extractDiagonalOffsets(filenameA);
     auto current_diag = createDiagonalMap(filenameA, A_offsets, size);
+
+    // Ground-truth reference: dense H and its running power. The driver computes
+    // C_k = H^{k+2}, so ref starts at H and is multiplied by H each iteration.
+    DenseMat denseH, ref;
+    if (verify) {
+        if (size > kVerifyMaxSize) {
+            std::cout << "[verify] disabled: size " << size << " > " << kVerifyMaxSize
+                      << " (O(size^3) too large)\n";
+            verify = false;
+        } else {
+            denseH.assign(size, std::vector<double>(size, 0.0));
+            fillDense(denseH, current_diag, size);
+            ref = denseH;  // H^1
+        }
+    }
 
     const int maxA = 1000;
     const int maxB = 1000;
@@ -687,6 +749,19 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
+
+        // Ground-truth check: this iteration's C must equal H^{k+2}.
+        if (verify) {
+            ref = denseMatMul(ref, denseH, size);
+            double maxAbsDiff = 0.0;
+            long mismatches = 0;
+            compareDense(ref, C_scratch, size, 1e-6, maxAbsDiff, mismatches);
+            std::cout << "[verify] iter " << k << ": "
+                      << (mismatches == 0 ? "PASS" : "FAIL")
+                      << " (max_abs_diff=" << maxAbsDiff
+                      << ", mismatches=" << mismatches << ")\n";
+        }
+
         C_diag_groups = splitDiagonals(results, grid_col);
         // Single write-back of the final C groups to HBM (persist for next iter).
         for (const auto& [groupIndex, groupDataRaw] : C_diag_groups) {
