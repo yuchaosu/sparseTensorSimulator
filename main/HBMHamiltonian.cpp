@@ -691,6 +691,14 @@ int main(int argc, char* argv[]) {
     bool verify = args.count("verify") ? std::stoi(args["verify"]) != 0 : false;
     const int kVerifyMaxSize = 4096;  // qubit <= 12
 
+    // Tiling/ablation toggles (defaults = best measured config).
+    const bool reuse   = args.count("reuse")   ? std::stoi(args["reuse"])   != 0 : true;   // #1 operand reuse
+    const bool ctile   = args.count("ctile")   ? std::stoi(args["ctile"])   != 0 : true;   // #2 C budget/spill
+    const bool balance = args.count("balance") ? std::stoi(args["balance"]) != 0 : false;  // #3 nnz-balanced grouping
+    auto splitG = [balance](const std::unordered_map<int, std::vector<std::tuple<double,int,int>>>& d, int gc) {
+        return balance ? splitDiagonalsBalanced(d, gc) : splitDiagonals(d, gc);
+    };
+
     HBMMemory hbmMemory;
     HBMScheduler scheduler(hbmMemory);
 
@@ -745,7 +753,7 @@ int main(int argc, char* argv[]) {
     (void)stride;
     auto B_offsets = A_offsets;
 
-    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> A_diag_groups = splitDiagonalsBalanced(current_diag, grid_col);
+    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> A_diag_groups = splitG(current_diag, grid_col);
     auto B_diag_groups = A_diag_groups;
     for (const auto& [groupIndex, groupDataRaw] : A_diag_groups) {
         GroupData groupData(groupDataRaw.begin(), groupDataRaw.end());
@@ -786,7 +794,7 @@ int main(int argc, char* argv[]) {
             C_offsets = computeResultDiagonals(C_offsets, B_offsets, size);
         }
         auto C_diag = initializeCdiagGroups(C_offsets, size);
-        C_diag_groups = splitDiagonalsBalanced(C_diag, grid_col);
+        C_diag_groups = splitG(C_diag, grid_col);
         std::unordered_map<int, int> C_offset_to_group = createOffsetToGroupMap(C_diag_groups);
         std::cout << "A offsets: ";
         for (const auto& offset : A_offsets) {
@@ -798,70 +806,75 @@ int main(int argc, char* argv[]) {
 
         C_base = A_base + 1000;
 
-        // C is accumulated in the byte-budgeted on-chip scratchpad; groups that
-        // don't fit spill to HBM (write-back) and are refilled on next touch.
-        CScratchpad C_scratch(hbmMemory, kScratchpadBytes);
+        // C is accumulated in the on-chip scratchpad. With -ctile it is bounded to
+        // the budget (groups that don't fit spill to HBM); without it, C is
+        // unbounded on-chip (ablation: no capacity limit, no spill).
+        CScratchpad C_scratch(hbmMemory, ctile ? kScratchpadBytes : SIZE_MAX);
 
         size_t maxA_bytes = 0, maxB_bytes = 0;  // largest A/B tile (sizes the buffers)
 
-        // Operand reuse (tiling): B is invariant across the outer loop, so load
-        // all B groups from HBM once and keep them resident in the scratchpad
-        // (was reloaded for every (i,j)). A_i is loaded once per outer row and
-        // reused across all j (was reloaded for every j). This removes the
-        // O(size_A * B_groups) redundant operand traffic. Result is unchanged;
-        // only scheduling/HBM traffic differs.
+        double prev_compute_ns = 0.0;
+        bool first_tile = true;
+        int cycles = 0;
+
+        // #1 operand reuse: B is invariant across the outer loop, so load all B
+        // groups once and keep them resident; A_i is loaded once per row and
+        // reused across all j. Removes the O(size_A * B_groups) redundant operand
+        // traffic. Without -reuse, A_i and B_j are reloaded from HBM every tile.
         std::map<int, GroupData> B_resident;
         size_t B_resident_bytes = 0;
-        for (int j = 0; j < static_cast<int>(B_diag_groups.size()); ++j) {
-            B_resident[j] = scheduler.requestGroup(B_base + j);   // one-time HBM load
-            size_t bb = computeGroupBytes(B_resident[j]);
-            B_resident_bytes += bb;
-            maxB_bytes = std::max(maxB_bytes, bb);
-        }
-
-        double prev_row_compute_ns = 0.0;
-        bool first_row = true;
-
-        int cycles = 0;
-        for (int i = 0; i < size_A; ++i) {
-            // Prefetch A_i (double-buffered): its load overlaps the previous
-            // row's compute.
-            uint64_t dramBefore = hbmMemory.getStats().cycles;
-            auto A_diag_local = scheduler.requestGroup(A_base + i);
-            double A_load_ns = static_cast<double>(hbmMemory.getStats().cycles - dramBefore);
-            if (!first_row) total_hidden_ns += std::min(prev_row_compute_ns, A_load_ns);
-            first_row = false;
-
-            maxA_bytes = std::max(maxA_bytes, computeGroupBytes(A_diag_local));
-            auto A_offsets_local = rebuildOffsets(A_diag_local);
-
-            // Reserve the A double-buffer (2x) + resident B; C uses the rest.
-            C_scratch.setReserved(2 * maxA_bytes + B_resident_bytes);
-
-            double row_compute_ns = 0.0;
+        if (reuse) {
             for (int j = 0; j < static_cast<int>(B_diag_groups.size()); ++j) {
-                const auto& B_diag_local = B_resident[j];       // resident, no HBM load
-                auto B_offsets_local = rebuildOffsets(B_diag_local);
-
-                auto A_diag_copy = A_diag_local;                // run_test_case takes non-const refs
-                auto B_diag_copy = B_diag_local;
-                cycles = run_test_case(
-                    A_offsets_local,
-                    B_offsets_local,
-                    A_diag_copy,
-                    B_diag_copy,
-                    scheduler,
-                    C_base,
-                    C_offset_to_group,
-                    C_scratch,
-                    out,
-                    Energyout
-                );
-                total_cycles += cycles;
-                row_compute_ns += static_cast<double>(cycles) / kAccelClockGHz;
+                B_resident[j] = scheduler.requestGroup(B_base + j);   // one-time HBM load
+                size_t bb = computeGroupBytes(B_resident[j]);
+                B_resident_bytes += bb;
+                maxB_bytes = std::max(maxB_bytes, bb);
             }
-            total_compute_ns += row_compute_ns;
-            prev_row_compute_ns = row_compute_ns;
+            for (int i = 0; i < size_A; ++i) {
+                uint64_t dramBefore = hbmMemory.getStats().cycles;
+                auto A_diag_local = scheduler.requestGroup(A_base + i);  // once per row
+                double A_load_ns = static_cast<double>(hbmMemory.getStats().cycles - dramBefore);
+                if (!first_tile) total_hidden_ns += std::min(prev_compute_ns, A_load_ns);
+                first_tile = false;
+                maxA_bytes = std::max(maxA_bytes, computeGroupBytes(A_diag_local));
+                auto A_offsets_local = rebuildOffsets(A_diag_local);
+                C_scratch.setReserved(2 * maxA_bytes + B_resident_bytes);
+
+                double row_compute_ns = 0.0;
+                for (int j = 0; j < static_cast<int>(B_diag_groups.size()); ++j) {
+                    auto A_diag_copy = A_diag_local;             // run_test_case takes non-const refs
+                    auto B_diag_copy = B_resident[j];
+                    auto B_offsets_local = rebuildOffsets(B_diag_copy);
+                    cycles = run_test_case(A_offsets_local, B_offsets_local, A_diag_copy, B_diag_copy,
+                                           scheduler, C_base, C_offset_to_group, C_scratch, out, Energyout);
+                    total_cycles += cycles;
+                    row_compute_ns += static_cast<double>(cycles) / kAccelClockGHz;
+                }
+                total_compute_ns += row_compute_ns;
+                prev_compute_ns = row_compute_ns;
+            }
+        } else {
+            for (int i = 0; i < size_A; ++i) {
+                for (int j = 0; j < static_cast<int>(B_diag_groups.size()); ++j) {
+                    uint64_t dramBefore = hbmMemory.getStats().cycles;
+                    auto A_diag_local = scheduler.requestGroup(A_base + i);  // reloaded every tile
+                    auto B_diag_local = scheduler.requestGroup(B_base + j);
+                    double load_ns = static_cast<double>(hbmMemory.getStats().cycles - dramBefore);
+                    if (!first_tile) total_hidden_ns += std::min(prev_compute_ns, load_ns);
+                    first_tile = false;
+                    maxA_bytes = std::max(maxA_bytes, computeGroupBytes(A_diag_local));
+                    maxB_bytes = std::max(maxB_bytes, computeGroupBytes(B_diag_local));
+                    C_scratch.setReserved(2 * maxA_bytes + 2 * maxB_bytes);
+                    auto A_offsets_local = rebuildOffsets(A_diag_local);
+                    auto B_offsets_local = rebuildOffsets(B_diag_local);
+                    cycles = run_test_case(A_offsets_local, B_offsets_local, A_diag_local, B_diag_local,
+                                           scheduler, C_base, C_offset_to_group, C_scratch, out, Energyout);
+                    total_cycles += cycles;
+                    double t = static_cast<double>(cycles) / kAccelClockGHz;
+                    total_compute_ns += t;
+                    prev_compute_ns = t;
+                }
+            }
         }
 
         // Scratchpad occupancy: A double buffer (2x) + resident B + the
@@ -915,7 +928,7 @@ int main(int argc, char* argv[]) {
                       << ", mismatches=" << mismatches << ")\n";
         }
 
-        C_diag_groups = splitDiagonalsBalanced(results, grid_col);
+        C_diag_groups = splitG(results, grid_col);
         // Single write-back of the final C groups to HBM (persist for next iter).
         for (const auto& [groupIndex, groupDataRaw] : C_diag_groups) {
             GroupData groupData(groupDataRaw.begin(), groupDataRaw.end());
