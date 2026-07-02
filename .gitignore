@@ -29,3 +29,8 @@ Wzh/hbm/debug
 # ---- Project-specific data dirs ----
 with_h_data/supermarq/ghz/
 external/
+
+# generated sweep outputs
+isca/manifest.txt
+isca/sweep_results.csv
+isca/sweep_rows/

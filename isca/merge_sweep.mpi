@@ -1,0 +1,18 @@
+#!/bin/bash
+#SBATCH -J hbm_merge
+#SBATCH -o merge_%j.out
+#SBATCH --partition=turin
+#SBATCH -N 1
+#SBATCH -n 1
+#SBATCH -t 00:10:00
+
+# Merge per-task CSV rows (isca/sweep_rows/) into one results file.
+# Runs automatically after the array (submitted with --dependency by submit_sweep.sh).
+set -u
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+ROWDIR="$REPO/isca/sweep_rows"
+CSV="$REPO/isca/sweep_results.csv"
+
+echo "matrix,qubit,row,col,iter,reuse,ctile,balance,compute_cycles,hbm_time_ns,hbm_dram_cycles,bytes_read,bytes_written,mem_latency_pct,spm_peak_kib,spill_reads,spill_writes,verify" > "$CSV"
+cat "$ROWDIR"/row_*.csv >> "$CSV" 2>/dev/null
+echo "merged $(($(wc -l < "$CSV") - 1)) rows -> $CSV"
