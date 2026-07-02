@@ -1,0 +1,763 @@
+#include "../include/Grid.h"
+#include "../include/Connection.h"
+#include "../include/TreeReducer.h"
+#include "../include/Utility.h"
+#include "../include/DiagonalReduction.h"
+#include "../include/HBM.h"
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdint>
+#include <fstream>
+#include <future>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+#include <map>
+#include <mutex>
+#include <sstream>
+#include <stdexcept>
+#include <tuple>
+#include <unordered_map>
+#include <vector>
+
+using GroupData = std::map<int, std::vector<std::tuple<double, int, int>>>;
+
+namespace {
+constexpr uint32_t kNumHBMChannels = 8;
+constexpr uint64_t kBurstBytes = 64;
+constexpr uint64_t kRowBytes = 2048;
+constexpr double kAlpha = 1.0;
+constexpr double kBeta = 1.0;
+constexpr double kGamma = 0.5;
+
+uint64_t alignTo(uint64_t value, uint64_t alignment) {
+    if (alignment == 0) {
+        return value;
+    }
+    const uint64_t remainder = value % alignment;
+    return remainder ? value + (alignment - remainder) : value;
+}
+
+uint64_t composeSystemAddress(uint32_t channel, uint64_t channelLocalAddr) {
+    const uint64_t stripeOffset = channelLocalAddr % kBurstBytes;
+    const uint64_t stripeIndexLocal = channelLocalAddr / kBurstBytes;
+    const uint64_t stripeIndexSystem = stripeIndexLocal * kNumHBMChannels + channel;
+    return stripeIndexSystem * kBurstBytes + stripeOffset;
+}
+
+size_t computeGroupBytes(const GroupData& data) {
+    size_t bytes = sizeof(uint32_t);
+    for (const auto& [offset, entries] : data) {
+        bytes += sizeof(int);
+        bytes += sizeof(uint32_t);
+        bytes += entries.size() * (sizeof(double) + 2 * sizeof(int));
+    }
+    return std::max<size_t>(bytes, sizeof(uint32_t));
+}
+
+size_t bytesToBursts(size_t bytes) {
+    return static_cast<size_t>((bytes + kBurstBytes - 1) / kBurstBytes);
+}
+
+struct HBMAllocation {
+    uint32_t channel = 0;
+    uint64_t channelBase = 0;
+    size_t sizeBytes = 0;
+    size_t burstCount = 0;
+};
+
+class HBMMemory {
+public:
+    HBMMemory()
+        : controller(), channelHeads{}, nextChannel(0), totalCycles(0),
+          bytesRead(0), bytesWritten(0), requestId(0) {
+        channelHeads.fill(0);
+    }
+
+    void initialStore(int groupIndex, const GroupData& data) {
+        store(groupIndex, data);
+    }
+
+    GroupData load(int groupIndex) {
+        auto allocIt = allocations.find(groupIndex);
+        if (allocIt == allocations.end()) {
+            throw std::runtime_error("HBM load: group missing");
+        }
+        issueTransfers(allocIt->second, allocIt->second.sizeBytes, false);
+        auto storageIt = storage.find(groupIndex);
+        if (storageIt == storage.end()) {
+            throw std::runtime_error("HBM load: payload missing");
+        }
+        return storageIt->second;
+    }
+
+    void store(int groupIndex, const GroupData& data) {
+        size_t sizeBytes = computeGroupBytes(data);
+        HBMAllocation& alloc = ensureAllocation(groupIndex, sizeBytes);
+        storage[groupIndex] = data;
+        alloc.sizeBytes = sizeBytes;
+        issueTransfers(alloc, sizeBytes, true);
+    }
+
+    void erase(int groupIndex) {
+        allocations.erase(groupIndex);
+        storage.erase(groupIndex);
+    }
+
+    uint64_t getTotalCycles() const {
+        return totalCycles;
+    }
+
+    struct Stats {
+        uint64_t bytesRead;
+        uint64_t bytesWritten;
+        uint64_t cycles;
+    };
+
+    Stats getStats() const {
+        return Stats{bytesRead, bytesWritten, totalCycles};
+    }
+
+private:
+    HBMAllocation& ensureAllocation(int groupIndex, size_t sizeBytes) {
+        const size_t neededBursts = bytesToBursts(sizeBytes);
+        auto it = allocations.find(groupIndex);
+        uint32_t channel;
+        if (it != allocations.end()) {
+            if (neededBursts <= it->second.burstCount) {
+                it->second.sizeBytes = sizeBytes;
+                it->second.burstCount = neededBursts;
+                return it->second;
+            }
+            channel = it->second.channel;
+            allocations.erase(it);
+        } else {
+            channel = nextChannel;
+            nextChannel = (nextChannel + 1) % kNumHBMChannels;
+        }
+
+        uint64_t& head = channelHeads[channel];
+        head = alignTo(head, kRowBytes);
+        HBMAllocation alloc;
+        alloc.channel = channel;
+        alloc.channelBase = head;
+        alloc.sizeBytes = sizeBytes;
+        alloc.burstCount = neededBursts;
+        head += alignTo(alloc.burstCount * kBurstBytes, kRowBytes);
+
+        auto [insertedIt, _] = allocations.emplace(groupIndex, alloc);
+        return insertedIt->second;
+    }
+
+    void issueTransfers(const HBMAllocation& alloc, size_t sizeBytes, bool isWrite) {
+        size_t remaining = sizeBytes;
+        for (size_t burst = 0; burst < alloc.burstCount; ++burst) {
+            const uint64_t channelAddr = alloc.channelBase + burst * kBurstBytes;
+            const uint64_t systemAddr = composeSystemAddress(alloc.channel, channelAddr);
+            const size_t chunk = std::min<size_t>(kBurstBytes, remaining);
+            queueRequest(systemAddr, chunk, isWrite);
+            if (remaining >= chunk) {
+                remaining -= chunk;
+            } else {
+                remaining = 0;
+            }
+        }
+        drain();
+    }
+
+    void queueRequest(uint64_t address, size_t sizeBytes, bool isWrite) {
+        size_t chunk = std::max<size_t>(sizeBytes, 1);
+        bool queued = false;
+        while (!queued) {
+            try {
+                controller.addRequest(address, isWrite, chunk, requestId++);
+                queued = true;
+            } catch (const std::runtime_error&) {
+                controller.tick();
+            }
+        }
+        if (isWrite) {
+            bytesWritten += chunk;
+        } else {
+            bytesRead += chunk;
+        }
+    }
+
+    void drain() {
+        while (controller.hasPendingRequests()) {
+            controller.tick();
+        }
+        totalCycles = std::max<uint64_t>(totalCycles, controller.getMaxChannelTime());
+    }
+
+    HBMController controller;
+    std::array<uint64_t, kNumHBMChannels> channelHeads;
+    uint32_t nextChannel;
+    std::unordered_map<int, HBMAllocation> allocations;
+    std::unordered_map<int, GroupData> storage;
+    uint64_t totalCycles;
+    uint64_t bytesRead;
+    uint64_t bytesWritten;
+    int requestId;
+};
+
+class HBMScheduler {
+public:
+    explicit HBMScheduler(HBMMemory& memoryRef) : memory(memoryRef) {}
+
+    GroupData requestGroup(int groupIndex) {
+        return memory.load(groupIndex);
+    }
+
+    void storeGroup(int groupIndex, const GroupData& data) {
+        memory.store(groupIndex, data);
+    }
+
+    uint64_t getTotalCycles() const {
+        return memory.getTotalCycles();
+    }
+
+private:
+    HBMMemory& memory;
+};
+
+struct GroupRange {
+    int index;
+    int minOffset;
+    int maxOffset;
+};
+
+struct ScheduledEntry {
+    int aIndex;
+    int bIndex;
+    int rangeMin;
+    int rangeMax;
+    double coverage;
+    double overlap;
+    double gap;
+    double score;
+};
+
+std::pair<int, int> computeOffsetRange(const std::unordered_map<int, std::vector<std::tuple<double, int, int>>>& group) {
+    if (group.empty()) {
+        return {0, 0};
+    }
+    int minOffset = std::numeric_limits<int>::max();
+    int maxOffset = std::numeric_limits<int>::min();
+    for (const auto& [offset, _] : group) {
+        minOffset = std::min(minOffset, offset);
+        maxOffset = std::max(maxOffset, offset);
+    }
+    return {minOffset, maxOffset};
+}
+
+std::vector<GroupRange> extractGroupRanges(const std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>& groups) {
+    std::vector<GroupRange> ranges;
+    ranges.reserve(groups.size());
+    int ordinal = 0;
+    for (const auto& [groupIndex, groupData] : groups) {
+        (void)groupIndex;
+        auto [minOffset, maxOffset] = computeOffsetRange(groupData);
+        ranges.push_back({ordinal++, minOffset, maxOffset});
+    }
+    return ranges;
+}
+
+std::vector<ScheduledEntry> buildMinkowskiSchedule(const std::vector<GroupRange>& aRanges,
+                                                   const std::vector<GroupRange>& bRanges) {
+    std::vector<ScheduledEntry> entries;
+    entries.reserve(aRanges.size() * bRanges.size());
+
+    for (const auto& a : aRanges) {
+        for (const auto& b : bRanges) {
+            int rangeMin = a.minOffset + b.minOffset;
+            int rangeMax = a.maxOffset + b.maxOffset;
+            ScheduledEntry entry{};
+            entry.aIndex = a.index;
+            entry.bIndex = b.index;
+            entry.rangeMin = rangeMin;
+            entry.rangeMax = rangeMax;
+            entry.coverage = static_cast<double>(rangeMax - rangeMin + 1);
+            entries.push_back(entry);
+        }
+    }
+
+    const size_t n = entries.size();
+    for (size_t i = 0; i < n; ++i) {
+        double overlapSum = 0.0;
+        double minGap = std::numeric_limits<double>::infinity();
+        for (size_t j = 0; j < n; ++j) {
+            if (i == j) {
+                continue;
+            }
+            const int lo = std::max(entries[i].rangeMin, entries[j].rangeMin);
+            const int hi = std::min(entries[i].rangeMax, entries[j].rangeMax);
+            if (hi >= lo) {
+                overlapSum += static_cast<double>(hi - lo + 1);
+                minGap = std::min(minGap, 0.0);
+            } else {
+                int distA = std::abs(entries[i].rangeMin - entries[j].rangeMax);
+                int distB = std::abs(entries[j].rangeMin - entries[i].rangeMax);
+                double gap = static_cast<double>(std::min(distA, distB));
+                minGap = std::min(minGap, gap);
+            }
+        }
+        entries[i].overlap = overlapSum;
+        entries[i].gap = std::isfinite(minGap) ? minGap : 0.0;
+        entries[i].score = kAlpha * entries[i].coverage +
+                           kBeta * entries[i].overlap -
+                           kGamma * entries[i].gap;
+    }
+
+    std::sort(entries.begin(), entries.end(), [](const ScheduledEntry& lhs, const ScheduledEntry& rhs) {
+        if (lhs.score != rhs.score) {
+            return lhs.score > rhs.score;
+        }
+        if (lhs.rangeMin != rhs.rangeMin) {
+            return lhs.rangeMin < rhs.rangeMin;
+        }
+        if (lhs.rangeMax != rhs.rangeMax) {
+            return lhs.rangeMax < rhs.rangeMax;
+        }
+        if (lhs.aIndex != rhs.aIndex) {
+            return lhs.aIndex < rhs.aIndex;
+        }
+        return lhs.bIndex < rhs.bIndex;
+    });
+
+    return entries;
+}
+
+} // namespace
+
+std::vector<std::vector<int>> generateReductionMap(
+    const std::vector<int>& A_offsets,
+    const std::vector<int>& B_offsets,
+    std::vector<DiagonalReduction*>& diagonalReductions,
+    std::ostream& out
+) {
+    size_t col = A_offsets.size();
+    size_t row = B_offsets.size();
+    std::vector<std::vector<int>> reductionMap(row, std::vector<int>(col, -1));
+
+    std::unordered_map<int, DiagonalReduction*> reducerMap;
+
+    std::vector<int> B_offsets_reversed = B_offsets;
+    std::reverse(B_offsets_reversed.begin(), B_offsets_reversed.end());
+    for (size_t i = 0; i < row; ++i) {
+        for (size_t j = 0; j < col; ++j) {
+            int index = A_offsets[j] + B_offsets_reversed[i];
+            reductionMap[i][j] = index;
+
+            if (reducerMap.find(index) == reducerMap.end()) {
+                DiagonalReduction* reducer = new DiagonalReduction(index, out);
+                reducerMap[index] = reducer;
+                diagonalReductions.push_back(reducer);
+                out << "Created DiagonalReduction for index: " << index << " from (A" << A_offsets[j] << ", B" << B_offsets_reversed[i] << ")" << std::endl;
+                out << "DiagonalReduction " << index << " connected with PE[" << i << ", " << j << "] " << std::endl;
+            }
+        }
+    }
+
+    out << "Final DiagonalReduction list:\n";
+    for (auto& reducer : diagonalReductions) {
+        out << " - Index: " << reducer->getIndex() << "\n";
+    }
+
+    return reductionMap;
+}
+
+std::unordered_map<int, int>
+createOffsetToGroupMap(
+    const std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>>& groups
+) {
+    std::unordered_map<int, int> offsetToGroup;
+
+    for (const auto& [groupIdx, offsetsMap] : groups) {
+        for (const auto& [offset, vec] : offsetsMap) {
+            offsetToGroup.emplace(offset, groupIdx);
+        }
+    }
+
+    return offsetToGroup;
+}
+
+std::map<int, std::vector<std::tuple<double, int, int>>> combineMaps(const std::map<int, std::vector<std::tuple<double, int, int>>>& mapA, const std::map<int, std::vector<std::tuple<double, int, int>>>& mapB) {
+    std::map<int, std::vector<std::tuple<double, int, int>>> result = mapA;
+
+    for (const auto& [key, vecB] : mapB) {
+        auto& vecRes = result[key];
+
+        std::map<std::pair<int,int>, size_t> indexMap;
+        for (size_t i = 0; i < vecRes.size(); ++i) {
+            int row = std::get<1>(vecRes[i]);
+            int col = std::get<2>(vecRes[i]);
+            indexMap[{row, col}] = i;
+        }
+
+        for (const auto& tupB : vecB) {
+            int rowB = std::get<1>(tupB);
+            int colB = std::get<2>(tupB);
+            auto it = indexMap.find({rowB, colB});
+            if (it != indexMap.end()) {
+                auto& tupRes = vecRes[it->second];
+                std::get<0>(tupRes) += std::get<0>(tupB);
+            } else {
+                vecRes.push_back(tupB);
+            }
+        }
+    }
+
+    return result;
+}
+
+int run_test_case( const std::vector<int>& A_offsets, const std::vector<int>& B_offsets,
+                    std::map<int, std::vector<std::tuple<double, int, int>>>& A_diag,
+                    std::map<int, std::vector<std::tuple<double, int, int>>>& B_diag,
+                    HBMScheduler& scheduler, int C_base, std::unordered_map<int, int> C_offset_to_group,
+                    std::ofstream& out, std::ofstream& Energyout) {
+
+    int COL = A_offsets.size();
+    int ROW = B_offsets.size();
+
+    std::vector<DiagonalReduction*> diagonalReductions;
+    std::vector<std::vector<int>> reductionMap = generateReductionMap(A_offsets, B_offsets, diagonalReductions, out);
+    out << "Reduction Map:\n";
+    for (const auto& row : reductionMap) {
+        for (int val : row) {
+            out << val << " ";
+        }
+        out << "\n";
+    }
+    out << "Diagonal Reductions Size: " << diagonalReductions.size() << "\n";
+    out << "Diagonal Reductions Indices:\n";
+    for (const auto& reduction : diagonalReductions) {
+        out << reduction->getIndex() << " ";
+    }
+
+    Grid grid(ROW, COL, diagonalReductions,reductionMap, out);
+
+    std::vector<Connection*> left_in(ROW), top_in(COL);
+    for (int i = 0; i < ROW; ++i) {
+        left_in[i] = new Connection(out);
+    }
+    for (int i = 0; i < COL; ++i) {
+        top_in[i] = new Connection(out);
+    }
+    grid.setInputConnections(top_in, left_in);
+
+    std::vector<std::vector<DataPackage>> A_diag_packages = buildDatapackage(A_diag);
+    std::vector<std::vector<DataPackage>> B_diag_packages = buildDatapackage(B_diag);
+    std::reverse(B_diag_packages.begin(), B_diag_packages.end());
+    out << "A Diagonal Packages:\n";
+    for (const auto& diag : A_diag_packages) {
+        for (const auto& dp : diag) {
+            out << dp << " ";
+        }
+        out << "\n";
+    }
+    out << "B Diagonal Packages:\n";
+    for (const auto& diag : B_diag_packages) {
+        for (const auto& dp : diag) {
+            out << dp << " ";
+        }
+        out << "\n";
+    }
+    int cycle = 0;
+
+    std::vector<int> A_inject_index(COL, 0);
+    std::vector<int> B_inject_index(ROW, 0);
+
+    bool injection_done_left = false;
+    bool injection_done_top = false;
+    bool injection_done = false;
+    while(true) {
+        out << "===== Cycle " << cycle << " =====\n";
+
+        for (int col = 0; col < COL; ++col) {
+            if (col < static_cast<int>(A_diag_packages.size()) && cycle >= col) {
+                int& idx = A_inject_index[col];
+                const auto& vec = A_diag_packages[col];
+
+                if (idx < static_cast<int>(vec.size()) && !top_in[col]->pendingSrc()) {
+                    top_in[col]->receiveSrc(vec[idx]);
+                    out << "Injecting A diagonal package at column " << col << ": " << vec[idx] << "\n";
+                    ++idx;
+
+                    if (idx == static_cast<int>(vec.size())) {
+                        top_in[col]->receiveInjectionFinished(true);
+                        out << "Injecting per-column finish signal at column " << col << ": true\n";
+                    }
+                }
+            }
+        }
+
+        for (int row = 0; row < ROW; ++row) {
+            if (row < static_cast<int>(B_diag_packages.size()) && cycle >= row) {
+                int& idx = B_inject_index[row];
+                const auto& vec = B_diag_packages[row];
+
+                if (idx < static_cast<int>(vec.size()) && !left_in[row]->pendingSrc()) {
+                    left_in[row]->receiveSrc(vec[idx]);
+                    out << "Injecting B diagonal package at row " << row << ": " << vec[idx] << "\n";
+                    ++idx;
+
+                    if (idx == static_cast<int>(vec.size())) {
+                        left_in[row]->receiveInjectionFinished(true);
+                        out << "Injecting per-row finish signal at row " << row << ": true\n";
+                    }
+                }
+            }
+        }
+
+        injection_done = true;
+        for (int i = 0; i < ROW; ++i) {
+            if (left_in[i]->pendingSrc()) injection_done = false;
+        }
+        for (int i = 0; i < COL; ++i) {
+            if (top_in[i]->pendingSrc()) injection_done = false;
+        }
+
+    grid.cycle(cycle);
+        if(injection_done && grid.isIdle()) {
+            out << "All data injected and processed. Breaking out of cycle loop.\n";
+            break;
+        }
+        ++cycle;
+        out << "Left Injection Signal: " << injection_done_left << ", Top Injection Signal: " << injection_done_top << ", Grid Idle: " << grid.isIdle() << "\n";
+    }
+
+    GroupData result = grid.getResults();
+    for (const auto& [offset, entries] : result) {
+        GroupData groupData = scheduler.requestGroup(C_offset_to_group.at(offset) + C_base);
+        for (const auto& [value, i, j] : entries) {
+            for (auto& [val, row, col] : groupData[offset]) {
+                if (row == i && col == j) {
+                    val += value;
+                    break;
+                }
+            }
+        }
+        scheduler.storeGroup(C_offset_to_group.at(offset) + C_base, groupData);
+    }
+    grid.printEnergy(Energyout);
+    out << "Total Cycles: " << cycle << "\n";
+
+    for (auto* conn : left_in) delete conn;
+    for (auto* conn : top_in) delete conn;
+    return cycle;
+}
+
+int main(int argc, char* argv[]) {
+    int total_cycles = 0;
+    std::map<std::string, std::string> args;
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg(argv[i]);
+        size_t eq_pos = arg.find('=');
+        if (arg.rfind("-", 0) == 0 && eq_pos != std::string::npos) {
+            std::string key = arg.substr(1, eq_pos - 1);
+            std::string value = arg.substr(eq_pos + 1);
+            args[key] = value;
+        }
+    }
+
+    int qubit_size = args.count("qubit") ? std::stoi(args["qubit"]) : 10;
+    std::string filename = args.count("file") ? args["file"] : "";
+    int size = static_cast<int>(std::pow(2, qubit_size));
+    int grid_row = args.count("row") ? std::stoi(args["row"]) : 3;
+    int grid_col = args.count("col") ? std::stoi(args["col"]) : 8;
+    int iterations = args.count("iter") ? std::stoi(args["iter"]) : 1;
+    std::string folder = args.count("folder") ? args["folder"] : "";
+
+    HBMMemory hbmMemory;
+    HBMScheduler scheduler(hbmMemory);
+
+    std::string output_name = filename;
+    size_t dot_pos = output_name.find_last_of(".");
+    if (dot_pos != std::string::npos) {
+        output_name = output_name.substr(0, dot_pos);
+    }
+    folder = "/mnt/beegfs/ysu34/hamlib/" + folder;
+    std::cout << "filename: " << folder + filename << "\n";
+    std::string basePath = folder;
+
+    std::ofstream out;
+    out.setstate(std::ios_base::failbit);
+    std::ofstream Energyout(folder + output_name +".power");
+
+    std::string filenameA = basePath + filename;
+    std::vector<int> A_offsets = extractDiagonalOffsets(filenameA);
+    auto current_diag = createDiagonalMap(filenameA, A_offsets, size);
+
+    auto B_offsets = A_offsets;
+
+    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> A_diag_groups = splitDiagonals(current_diag, grid_col);
+    auto B_diag_groups = A_diag_groups;
+    for (const auto& [groupIndex, groupDataRaw] : A_diag_groups) {
+        GroupData groupData(groupDataRaw.begin(), groupDataRaw.end());
+        hbmMemory.initialStore(groupIndex, groupData);
+    }
+
+    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> currentA_groups = A_diag_groups;
+    std::vector<GroupRange> bRanges = extractGroupRanges(B_diag_groups);
+
+    int B_base = 0;
+    std::vector<int> C_offsets;
+    std::map<int, std::unordered_map<int, std::vector<std::tuple<double, int, int>>>> C_diag_groups;
+    int C_base = 0;
+    std::unordered_map<int, std::vector<std::tuple<double, int, int>>> results;
+    int old_size_A = 0;
+    int old_A_base = 0;
+    HBMMemory::Stats prevStats = hbmMemory.getStats();
+
+    for (int k = 0; k < iterations; ++k) {
+        std::cout << "Iteration" << k << ":\n";
+
+        int size_A = static_cast<int>(currentA_groups.size());
+        auto aRanges = extractGroupRanges(currentA_groups);
+        auto schedule = buildMinkowskiSchedule(aRanges, bRanges);
+
+        if (k == 0) {
+            std::cout << "A diagonal size:" << A_offsets.size() << "\n";
+            C_offsets = computeResultDiagonals(A_offsets, B_offsets, size);
+        } else {
+            std::cout << "A diagonal size:" << C_offsets.size() << "\n";
+            C_offsets = computeResultDiagonals(C_offsets, B_offsets, size);
+        }
+        auto C_diag = initializeCdiagGroups(C_offsets, size);
+        C_diag_groups = splitDiagonals(C_diag, grid_col);
+        std::unordered_map<int, int> C_offset_to_group = createOffsetToGroupMap(C_diag_groups);
+        std::cout << "A offsets: ";
+        for (const auto& offset : A_offsets) {
+            std::cout << offset << " ";
+        }
+        std::cout << "\n";
+
+        int A_base = 1000 * k;
+        C_base = A_base + 1000;
+
+        for (const auto& [groupIndex, groupDataRaw] : C_diag_groups) {
+            GroupData groupData(groupDataRaw.begin(), groupDataRaw.end());
+            hbmMemory.initialStore(C_base + groupIndex, groupData);
+        }
+
+        int cycles = 0;
+        for (const auto& entry : schedule) {
+            auto A_diag_local = scheduler.requestGroup(A_base + entry.aIndex);
+            auto B_diag_local = scheduler.requestGroup(B_base + entry.bIndex);
+
+            auto A_offsets_local = rebuildOffsets(A_diag_local);
+            auto B_offsets_local = rebuildOffsets(B_diag_local);
+
+            cycles = run_test_case(
+                A_offsets_local,
+                B_offsets_local,
+                A_diag_local,
+                B_diag_local,
+                scheduler,
+                C_base,
+                C_offset_to_group,
+                out,
+                Energyout
+            );
+            total_cycles += cycles;
+        }
+
+        for (int i =0; i < old_size_A; ++i) {
+            hbmMemory.erase(old_A_base + i);
+        }
+        if (k == 1) {
+            old_A_base = A_base;
+            old_size_A = size_A;
+        }
+        C_offsets.clear();
+        results.clear();
+        for (const auto& [groupIndex, groupDataRaw] : C_diag_groups) {
+            GroupData groupData = hbmMemory.load(C_base + groupIndex);
+            hbmMemory.erase(C_base + groupIndex);
+            for (const auto& [offset, entries] : groupData) {
+                bool allZero = true;
+                for (const auto& [value, i, j] : entries) {
+                    if (value != 0.0) {
+                        allZero = false;
+                        break;
+                    }
+                }
+
+                if (!allZero) {
+                    results[offset] = entries;
+                    C_offsets.push_back(offset);
+                }
+            }
+        }
+        C_diag_groups = splitDiagonals(results, grid_col);
+        for (const auto& [groupIndex, groupDataRaw] : C_diag_groups) {
+            GroupData groupData(groupDataRaw.begin(), groupDataRaw.end());
+            scheduler.storeGroup(C_base + groupIndex, groupData);
+        }
+        currentA_groups = C_diag_groups;
+        std::cout << "Matrix diagonal size: " << C_offsets.size() << "\n";
+        std::cout << "Diagonal";
+        for (const auto& offset : C_offsets) {
+            std::cout << offset << " ";
+        }
+
+        std::cout << "\n";
+        HBMMemory::Stats currentStats = hbmMemory.getStats();
+        uint64_t deltaCycles = currentStats.cycles - prevStats.cycles;
+        uint64_t deltaRead = currentStats.bytesRead - prevStats.bytesRead;
+        uint64_t deltaWrite = currentStats.bytesWritten - prevStats.bytesWritten;
+        uint64_t deltaBytes = deltaRead + deltaWrite;
+        double iterationBandwidth = 0.0;
+        if (deltaCycles > 0) {
+            iterationBandwidth = static_cast<double>(deltaBytes) * 1e9 /
+                                 (static_cast<double>(deltaCycles) * 1024.0 * 1024 * 1024);
+        }
+
+        std::cout << std::fixed << std::setprecision(2);
+        std::cout << "HBM iteration stats: Read " << (deltaRead / (1024.0 * 1024))
+                  << " MiB, Write " << (deltaWrite / (1024.0 * 1024))
+                  << " MiB, Bandwidth " << iterationBandwidth << " GiB/s\n";
+        std::cout.unsetf(std::ios::floatfield);
+        std::cout << std::setprecision(6);
+        std::cout << "Cycles: " << cycles << "\n";
+        std::cout << "Finished multiplication with matrix_output_" << k << ".txt\n";
+        std::cout << "------------------------------------------"<< std::endl;
+
+        prevStats = currentStats;
+    }
+
+    out << "Total cycles: " << total_cycles << "\n";
+    HBMMemory::Stats totalStats = hbmMemory.getStats();
+    out << "HBM total time: " << totalStats.cycles << " ns\n";
+    out << "HBM bytes read: " << totalStats.bytesRead << ", bytes written: "
+        << totalStats.bytesWritten << "\n";
+    std::cout << "Finished.\n";
+    std::cout << "Total cycles: " << total_cycles << "\n";
+    uint64_t mem_cycles = totalStats.cycles;
+    std::cout << "HBM Time: " << mem_cycles << " ns\n";
+    double totalBandwidth = 0.0;
+    if (mem_cycles > 0) {
+        uint64_t totalBytes = totalStats.bytesRead + totalStats.bytesWritten;
+        totalBandwidth = static_cast<double>(totalBytes) * 1e9 /
+                         (static_cast<double>(mem_cycles) * 1024.0 * 1024 * 1024);
+    }
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "HBM total transferred: Read " << (totalStats.bytesRead / (1024.0 * 1024))
+              << " MiB, Write " << (totalStats.bytesWritten / (1024.0 * 1024))
+              << " MiB, Bandwidth " << totalBandwidth << " GiB/s\n";
+    std::cout.unsetf(std::ios::floatfield);
+    std::cout << std::setprecision(6);
+    out << "HBM Time:" << mem_cycles << "\n";
+    out << "HBM Bytes Read:" << totalStats.bytesRead << ", HB Bytes Written:" << totalStats.bytesWritten << "\n";
+    std::cout << "Configuration:\n";
+    std::cout << "Qubit Size: " << qubit_size << "\n";
+    std::cout << "Grid Size: " << grid_row << "x" << grid_col << "\n";
+    std::cout << "HBM Channels: " << kNumHBMChannels << "\n";
+
+    std::cout << "Statistics saved to " << folder + output_name + ".power" << "\n";
+    return 0;
+}

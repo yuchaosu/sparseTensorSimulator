@@ -9,8 +9,6 @@
 #include <iomanip>
 #include <cmath>
 #include <cstring>
-#include <cstdio>
-#include <string>
 
 namespace AcceleratorHBM {
 
@@ -34,6 +32,16 @@ HBMInterface::HBMInterface(uint32_t channelId, const HBMTimingParams& timing)
     for (int i = 0; i < 4; ++i) lastIssueAtBG[i] = 0;
     // Initialize bank states
     banks.resize(banksPerRank);
+    
+    // CRITICAL FIX: Initialize all banks to IDLE with timing constraints at 0
+    // This allows immediate activation on first access
+    for (auto& bank : banks) {
+        bank.state = BankState::IDLE;
+        bank.openRow = 0;
+        bank.actAllowedAt = 0;   // Allow immediate activation
+        bank.preAllowedAt = 0;
+        bank.colAllowedAt = 0;
+    }
     
     // Initialize timing
     nextBurstAt = 0;
@@ -215,7 +223,7 @@ uint64_t HBMInterface::doAccess(MemPacket* pkt, uint64_t currentTime) {
     uint64_t earliestBus = std::max(earliestBG, nextBusFreeAt);
 
     // Issue at the max of all constraints
-    uint64_t issueTime = earliestBus;
+    uint64_t issueTime = std::max(earliestBG, nextBusFreeAt);
 
     // Data ready after tCL + tBURST from issue
     uint64_t readyTime = issueTime + (uint64_t)timing.tCL + (uint64_t)timing.tBURST;
@@ -244,8 +252,23 @@ MemPacket* HBMInterface::chooseNextRead(uint64_t currentTime) {
         uint16_t row, col;
         decodeAddress(pkt->addr, rank, bank, row, col, bankGroup);
         
-        // Check if can access this bank
-        if (isRowHit(bank, row) || canIssueActivate(bank, currentTime)) {
+        // Check if we can access this packet:
+        // 1. Row hit - can access immediately
+        // 2. Bank is IDLE - can activate immediately  
+        // 3. Bank is ACTIVE with wrong row - can precharge then activate
+        if (isRowHit(bank, row)) {
+            readQueue.erase(it);
+            return pkt;
+        }
+        
+        if (banks[bank].state == BankState::IDLE && canIssueActivate(bank, currentTime)) {
+            readQueue.erase(it);
+            return pkt;
+        }
+        
+        // If bank is ACTIVE with different row, check if we can precharge
+        if (banks[bank].state == BankState::ACTIVE && canIssuePrecharge(bank, currentTime)) {
+            // We can precharge and then activate - doAccess() will handle this
             readQueue.erase(it);
             return pkt;
         }
@@ -261,7 +284,23 @@ MemPacket* HBMInterface::chooseNextWrite(uint64_t currentTime) {
         uint16_t row, col;
         decodeAddress(pkt->addr, rank, bank, row, col, bankGroup);
         
-        if (isRowHit(bank, row) || canIssueActivate(bank, currentTime)) {
+        // Check if we can access this packet:
+        // 1. Row hit - can access immediately
+        // 2. Bank is IDLE - can activate immediately
+        // 3. Bank is ACTIVE with wrong row - can precharge then activate
+        if (isRowHit(bank, row)) {
+            writeQueue.erase(it);
+            return pkt;
+        }
+        
+        if (banks[bank].state == BankState::IDLE && canIssueActivate(bank, currentTime)) {
+            writeQueue.erase(it);
+            return pkt;
+        }
+        
+        // If bank is ACTIVE with different row, check if we can precharge
+        if (banks[bank].state == BankState::ACTIVE && canIssuePrecharge(bank, currentTime)) {
+            // We can precharge and then activate - doAccess() will handle this
             writeQueue.erase(it);
             return pkt;
         }
@@ -325,79 +364,6 @@ HBMController::~HBMController() {
     for (auto channel : channels) {
         delete channel;
     }
-
-    if (traceFp) {
-        fclose(traceFp);
-        traceFp = nullptr;
-    }
-    if (traceAggregateFp) {
-        // write summary if any
-        if (traceAggregateEnabled) {
-            // Ensure we have initialized first/last
-            if (agg_first_ts == 0 && agg_last_ts == 0) {
-                agg_first_ts = 0;
-                agg_last_ts = 0;
-            }
-        }
-        std::fclose(traceAggregateFp);
-        traceAggregateFp = nullptr;
-    }
-}
-
-void HBMController::enableTrace(const std::string& path) {
-    if (traceFp) return; // already enabled
-    traceFp = std::fopen(path.c_str(), "w");
-    if (!traceFp) {
-        std::cerr << "Failed to open trace file: " << path << std::endl;
-        traceEnabled = false;
-        return;
-    }
-    // Write CSV header
-    std::fprintf(traceFp, "timestamp_ns,channel,evt,addr,size,requestorId\n");
-    std::fflush(traceFp);
-    traceEnabled = true;
-}
-
-void HBMController::enableTraceAggregate(const std::string& path) {
-    if (traceAggregateFp) return;
-    traceAggregateFp = std::fopen(path.c_str(), "w");
-    if (!traceAggregateFp) {
-        std::cerr << "Failed to open aggregate trace file: " << path << std::endl;
-        traceAggregateEnabled = false;
-        return;
-    }
-    // write a simple header
-    std::fprintf(traceAggregateFp, "total_bytes,enq_count,comp_count,first_time_ns,last_time_ns\n");
-    std::fflush(traceAggregateFp);
-    // init counters
-    agg_total_bytes = 0;
-    agg_enq_count = 0;
-    agg_comp_count = 0;
-    agg_first_ts = 0;
-    agg_last_ts = 0;
-    traceAggregateEnabled = true;
-}
-
-void HBMController::disableTraceAggregate() {
-    if (!traceAggregateFp) return;
-    // write summary line
-    std::fprintf(traceAggregateFp, "%llu,%llu,%llu,%llu,%llu\n",
-                 static_cast<unsigned long long>(agg_total_bytes),
-                 static_cast<unsigned long long>(agg_enq_count),
-                 static_cast<unsigned long long>(agg_comp_count),
-                 static_cast<unsigned long long>(agg_first_ts),
-                 static_cast<unsigned long long>(agg_last_ts));
-    std::fflush(traceAggregateFp);
-    std::fclose(traceAggregateFp);
-    traceAggregateFp = nullptr;
-    traceAggregateEnabled = false;
-}
-
-void HBMController::disableTrace() {
-    if (!traceFp) return;
-    std::fclose(traceFp);
-    traceFp = nullptr;
-    traceEnabled = false;
 }
 
 void HBMController::init(uint64_t totalSize) {
@@ -477,8 +443,7 @@ bool HBMController::readQueueFull(uint32_t channelId, uint32_t neededEntries) {
 
 bool HBMController::writeQueueFull(uint32_t channelId, uint32_t neededEntries) {
     auto& channel = channels[channelId];
-    uint32_t totalSize = channel->writeQueue.size() + respQueues[channelId].size();
-    return (totalSize + neededEntries) > writeBufferSize;
+    return (channel->writeQueue.size() + neededEntries) > writeBufferSize;
 }
 
 bool HBMController::recvTimingReq(MemRequest* pkt, uint64_t currentTime) {
@@ -532,22 +497,6 @@ bool HBMController::recvTimingReq(MemRequest* pkt, uint64_t currentTime) {
         } else {
             channel->addToWriteQueue(memPkt);
             stats.writeBursts++;
-            //std::cout<<"Write queue size channel "<<(int)channelId<<": "<<channel->writeQueue.size()<<"\n";
-        }
-
-        // Trace ENQ event (enqueue)
-        if (traceAggregateEnabled) {
-            agg_enq_count++;
-            agg_total_bytes += memPkt->size;
-            if (agg_first_ts == 0 || currentTime < agg_first_ts) agg_first_ts = currentTime;
-            if (currentTime > agg_last_ts) agg_last_ts = currentTime;
-        } else if (traceEnabled && traceFp) {
-            std::fprintf(traceFp, "%llu,%u,ENQ,0x%llx,%u,%u\n",
-                         static_cast<unsigned long long>(currentTime),
-                         static_cast<unsigned int>(channelId),
-                         static_cast<unsigned long long>(memPkt->addr),
-                         static_cast<unsigned int>(memPkt->size),
-                         static_cast<unsigned int>(memPkt->requestorId));
         }
         
         addr += burstSize;
@@ -618,12 +567,12 @@ uint64_t HBMController::recvAtomic(MemRequest* pkt) {
     // Apply the data move atomically at the end (functional model)
     if (pkt->isWrite && pkt->data) {
         std::memcpy(&memory[pkt->addr], pkt->data, pkt->size);
-        stats.writeReqs++;
-        stats.bytesWritten += pkt->size;
+        //stats.writeReqs++;
+        //stats.bytesWritten += pkt->size;
     } else if (pkt->isRead && pkt->data) {
         std::memcpy(pkt->data, &memory[pkt->addr], pkt->size);
-        stats.readReqs++;
-        stats.bytesRead += pkt->size;
+        //stats.readReqs++;
+        //stats.bytesRead += pkt->size;
     }
 
     // Latency seen by the caller is the time to the last burst’s data
@@ -706,28 +655,16 @@ void HBMController::processNextReqEvent(uint32_t channelId, uint64_t currentTime
             stats.totalReadLatency += (readyTime - pkt->entryTime);
         } else {
             // Write completes immediately (posted write)
+            // FIX: Increment stats counters for writes
+            stats.writeReqs++;
+            stats.bytesWritten += pkt->size;
             stats.totalWriteLatency += (currentTime - pkt->entryTime);
-            std::cout<<"Write complete at time "<<currentTime<<" for addr "<<std::hex<<pkt->addr<<std::dec<<"\n";
+            
             // Perform actual write to memory
             if (pkt->pkt && pkt->pkt->data) {
                 std::memcpy(&memory[pkt->addr], pkt->pkt->data, pkt->size);
             }
-
-            // Trace write completion (posted)
-            if (traceAggregateEnabled) {
-                agg_comp_count++;
-                if (agg_first_ts == 0 || currentTime < agg_first_ts) agg_first_ts = currentTime;
-                if (currentTime > agg_last_ts) agg_last_ts = currentTime;
-            } else if (traceEnabled && traceFp && pkt->pkt) {
-                std::fprintf(traceFp, "%llu,%u,COMP,0x%llx,%u,%u\n",
-                             static_cast<unsigned long long>(currentTime),
-                             static_cast<unsigned int>(channelId),
-                             static_cast<unsigned long long>(pkt->addr),
-                             static_cast<unsigned int>(pkt->size),
-                             static_cast<unsigned int>(pkt->pkt->requestorId));
-                std::fflush(traceFp);
-            }
-
+            
             delete pkt;
         }
         
@@ -738,58 +675,47 @@ void HBMController::processNextReqEvent(uint32_t channelId, uint64_t currentTime
 
 void HBMController::processRespondEvent(uint32_t channelId, uint64_t currentTime) {
     auto& respQueue = respQueues[channelId];
-    
-    if (!respQueue.empty()) {
-        MemPacket* pkt = respQueue.front();
-        
-        // Only when the burst has fully completed
-        if (pkt->readyTime <= currentTime) {
+    if (respQueue.empty()) return;
 
-            // Perform memory read/write to backing store
-            if (pkt->pkt && pkt->pkt->data) {
-                if (pkt->isRead) {
-                    std::memcpy(pkt->pkt->data, &memory[pkt->addr], pkt->size);
-                } else {
-                    std::memcpy(&memory[pkt->addr], pkt->pkt->data, pkt->size);
-                }
-            }
+    MemPacket* pkt = respQueue.front();
 
-            // --- Update statistics when transfer actually finishes ---
-            // if (pkt->isRead) {
-            //     stats.readReqs++;
-            //     stats.bytesRead += pkt->size;
-            // } else {
-            //     stats.writeReqs++;
-            //     stats.bytesWritten += pkt->size;
-            // }
-            stats.channelAccesses[channelId]++;
+    // If the packet has reached its ready time — complete it
+    if (pkt->readyTime <= currentTime) {
 
-            // Trace completion event
-            if (traceAggregateEnabled) {
-                agg_comp_count++;
-                if (agg_first_ts == 0 || currentTime < agg_first_ts) agg_first_ts = currentTime;
-                if (currentTime > agg_last_ts) agg_last_ts = currentTime;
-            } else if (traceEnabled && traceFp && pkt->pkt) {
-                std::fprintf(traceFp, "%llu,%u,COMP,0x%llx,%u,%u\n",
-                             static_cast<unsigned long long>(currentTime),
-                             static_cast<unsigned int>(channelId),
-                             static_cast<unsigned long long>(pkt->addr),
-                             static_cast<unsigned int>(pkt->size),
-                             static_cast<unsigned int>(pkt->pkt->requestorId));
-                std::fflush(traceFp);
-            }
-
-            // Retire the request
-            respQueue.pop();
-            delete pkt;
-
-            // Schedule next response if queue not empty
-            if (!respQueue.empty()) {
-                scheduleResponse(channelId, respQueue.front()->readyTime);
+        // Perform memory read/write to backing store
+        if (pkt->pkt && pkt->pkt->data) {
+            if (pkt->isRead) {
+                std::memcpy(pkt->pkt->data, &memory[pkt->addr], pkt->size);
+            } else {
+                std::memcpy(&memory[pkt->addr], pkt->pkt->data, pkt->size);
             }
         }
+
+        // Update statistics
+        if (pkt->isRead) {
+            stats.readReqs++;
+            stats.bytesRead += pkt->size;
+        } else {
+            stats.writeReqs++;
+            stats.bytesWritten += pkt->size;
+        }
+        stats.channelAccesses[channelId]++;
+
+        // Retire the request
+        respQueue.pop();
+        delete pkt;
+
+        // Schedule next response if any remain
+        if (!respQueue.empty()) {
+            scheduleResponse(channelId, respQueue.front()->readyTime);
+        }
+
+    } else {
+        // Not ready yet → reschedule next check to its readyTime
+        scheduleResponse(channelId, pkt->readyTime);
     }
 }
+
 
 
 void HBMController::scheduleNextRequest(uint32_t channelId, uint64_t time) {

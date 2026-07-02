@@ -1,12 +1,30 @@
+# ---- Build artifacts ----
 *.o
-*.png 
 *.exe
-*.txt
-with_h_data/supermarq/ghz/
+objs/
 Wzh/outputs/
+
+# Compiled executables (no extension) produced by the various Makefiles
+a.out
+Wzh/test_hbm
+Wzh/test/rwtest
+Wzh/test/hbm_diag_test
+Wzh/hbm/hbm_example
+Wzh/hbm/debug
+
+# ---- Generated data / results / plots ----
 *.out
 *.mpi
 *.pdf
+*.png
 *.npy
+*.swp
+
+# Large generated Hamiltonian / feature dumps
+*.txt
+
+# ---- Editor / env ----
 .vscode/
-objs/
+
+# ---- Project-specific data dirs ----
+with_h_data/supermarq/ghz/

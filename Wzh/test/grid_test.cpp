@@ -20,7 +20,7 @@ void injectInputs(std::vector<Connection*>& top, std::vector<Connection*>& left)
 void runCycles(Grid& grid, int count) {
     for (int i = 0; i < count; ++i) {
         std::cout << "===== Cycle " << i << " =====\n";
-        grid.cycle();
+    grid.cycle(cycle);
     }
 }
 

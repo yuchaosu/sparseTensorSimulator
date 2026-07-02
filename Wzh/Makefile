@@ -5,7 +5,7 @@ CXXFLAGS = -std=c++17 -O3 -Iinclude/ -Iexternal/
 #DEBUGFLAGS = -DDEBUG_MEM_OUTPUT -DDEBUG_MSWITCH_FUNC
 
 # Executable names (without paths)
-BINARIES = matrixMulti matrixMultiBlock matrixMultiBlockDiagonal matrixMultiHam
+BINARIES = matrixMulti matrixMultiBlock matrixMultiBlockDiagonal matrixMultiHam HBMHamiltonian HBMHamiltonianScheduled HBMHamiltonianPrefetch
 
 # All shared .cpp sources in src/
 COMMON_SOURCES = $(wildcard src/*.cpp)
@@ -44,7 +44,22 @@ matrixMultiBlockDiagonal: $(COMMON_OBJS)
 # matrixMultiHam: link main source
 matrixMultiHam: $(COMMON_OBJS)
 	@mkdir -p $(OUTDIR)
-	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) matrixMultiplyHam.cpp
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) main/matrixMultiplyHam.cpp
+
+# HBMHamiltonian: link main source
+HBMHamiltonian: $(COMMON_OBJS)
+	@mkdir -p $(OUTDIR)
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) main/HBMHamiltonian.cpp
+
+# HBMHamiltonianScheduled: link main source with scheduling heuristic
+HBMHamiltonianScheduled: $(COMMON_OBJS)
+	@mkdir -p $(OUTDIR)
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) main/HBMHamiltonianScheduled.cpp
+
+# HBMHamiltonianPrefetch: link new prefetch-enabled main
+HBMHamiltonianPrefetch: $(COMMON_OBJS)
+	@mkdir -p $(OUTDIR)
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) main/HBMHamiltonianPrefetch.cpp
 
 # Rule to build .o files from src/
 $(OBJSDIR)/%.o: src/%.cpp $(INCLUDES)

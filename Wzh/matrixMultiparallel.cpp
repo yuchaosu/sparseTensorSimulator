@@ -223,7 +223,7 @@ int main() {
                         if (top_in[i]->pendingSrc()) injection_done = false;
                     }
 
-                    grid.cycle();
+                    grid.cycle(cycle);
                     //reducer.cycle();
 
                     if(injection_done && grid.isIdle()) {

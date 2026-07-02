@@ -15,6 +15,8 @@
 #include <set>
 #include <functional>
 #include <cassert>
+#include <cstdio>
+#include <string>
 
 namespace AcceleratorHBM {
 
@@ -343,6 +345,17 @@ public:
     
     Stats& getStats() { return stats; }
     void printStats();
+
+    // Tracing API (optional runtime tracing to CSV)
+    // Each trace line format (CSV):
+    // timestamp_ns,channel,evt,addr,size,requestorId
+    // evt = ENQ/COMP, addr in hex
+    void enableTrace(const std::string& path);
+    void disableTrace();
+    // Aggregate tracing: record totals (compact) instead of per-operation lines
+    void enableTraceAggregate(const std::string& path);
+    void disableTraceAggregate();
+    bool isTraceEnabled() const { return traceEnabled; }
     
 private:
     // Configuration
@@ -385,6 +398,18 @@ private:
     std::vector<uint8_t> memory;
     uint64_t totalMemorySize;
     uint64_t currentTime;  // Track simulation time
+
+    // Tracing
+    bool traceEnabled = false;
+    FILE* traceFp = nullptr;
+    // Aggregate tracing state
+    bool traceAggregateEnabled = false;
+    FILE* traceAggregateFp = nullptr;
+    uint64_t agg_total_bytes = 0;
+    uint64_t agg_enq_count = 0;
+    uint64_t agg_comp_count = 0;
+    uint64_t agg_first_ts = 0;
+    uint64_t agg_last_ts = 0;
 };
 
 } // namespace AcceleratorHBM

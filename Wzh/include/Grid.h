@@ -18,7 +18,7 @@ public:
     void setInjectionFinished(bool finished); // Set injection finished status
     std::map<int, std::vector<std::tuple<double, int, int>>> getResults(); // Get results from diagonal reductions
 
-    void cycle();  // Simulate one clock cycle
+    void cycle(uint64_t cycle);  // Simulate one clock cycle (pass simulation cycle count)
 
     PE* getPE(int row, int col) const;
 

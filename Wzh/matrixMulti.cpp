@@ -208,7 +208,7 @@ void run_test_case(int i, const std::vector<int>& A_offsets, const std::vector<i
             if (top_in[i]->pendingSrc()) injection_done = false;
         }
 
-        grid.cycle();
+    grid.cycle(cycle);
         //reducer.cycle();
         //std::cout << "Grid state after cycle " << cycle << ":\n";
         if(injection_done && grid.isIdle()) {
