@@ -1,4 +1,6 @@
 #include "../include/PE.h"
+#include <chrono>
+#include <string>
 
 PE::PE(int row, int col, std::ostream& output_stream) : r(row), c(col), out(output_stream) {
     connection_top = nullptr;
@@ -6,6 +8,77 @@ PE::PE(int row, int col, std::ostream& output_stream) : r(row), c(col), out(outp
     connection_left = nullptr;
     connection_right = nullptr;
     out << "PE created at (" << r << ", " << c << ")\n";
+}
+
+// Static tracing state
+static bool g_compute_trace_enabled = false;
+static FILE* g_compute_trace_fp = nullptr;
+// Aggregate compute tracing state
+static bool g_compute_trace_agg_enabled = false;
+static FILE* g_compute_trace_agg_fp = nullptr;
+static uint64_t g_compute_agg_flops = 0;
+static uint64_t g_compute_agg_events = 0;
+static uint64_t g_compute_agg_first_ts = 0;
+static uint64_t g_compute_agg_last_ts = 0;
+
+void PE::enableComputeTrace(const std::string& path) {
+    if (g_compute_trace_enabled) return;
+    g_compute_trace_fp = std::fopen(path.c_str(), "w");
+    if (!g_compute_trace_fp) {
+        std::cerr << "Failed to open compute trace file: " << path << std::endl;
+        g_compute_trace_enabled = false;
+        return;
+    }
+    std::fprintf(g_compute_trace_fp, "timestamp_ns,pe_r,pe_c,evt,flops,idx1,idx2,result\n");
+    std::fflush(g_compute_trace_fp);
+    g_compute_trace_enabled = true;
+}
+
+void PE::enableComputeTraceAggregate(const std::string& path) {
+    if (g_compute_trace_agg_enabled) return;
+    g_compute_trace_agg_fp = std::fopen(path.c_str(), "w");
+    if (!g_compute_trace_agg_fp) {
+        std::cerr << "Failed to open compute aggregate trace file: " << path << std::endl;
+        g_compute_trace_agg_enabled = false;
+        return;
+    }
+    std::fprintf(g_compute_trace_agg_fp, "total_flops,events,first_time_ns,last_time_ns\n");
+    std::fflush(g_compute_trace_agg_fp);
+    g_compute_agg_flops = 0;
+    g_compute_agg_events = 0;
+    g_compute_agg_first_ts = 0;
+    g_compute_agg_last_ts = 0;
+    g_compute_trace_agg_enabled = true;
+}
+
+void PE::disableComputeTraceAggregate() {
+    if (!g_compute_trace_agg_fp) return;
+    std::fprintf(g_compute_trace_agg_fp, "%llu,%llu,%llu,%llu\n",
+                 static_cast<unsigned long long>(g_compute_agg_flops),
+                 static_cast<unsigned long long>(g_compute_agg_events),
+                 static_cast<unsigned long long>(g_compute_agg_first_ts),
+                 static_cast<unsigned long long>(g_compute_agg_last_ts));
+    std::fflush(g_compute_trace_agg_fp);
+    std::fclose(g_compute_trace_agg_fp);
+    g_compute_trace_agg_fp = nullptr;
+    g_compute_trace_agg_enabled = false;
+}
+
+bool PE::isComputeTraceAggregateEnabled() {
+    return g_compute_trace_agg_enabled;
+}
+
+void PE::disableComputeTrace() {
+    if (!g_compute_trace_enabled) return;
+    if (g_compute_trace_fp) {
+        std::fclose(g_compute_trace_fp);
+        g_compute_trace_fp = nullptr;
+    }
+    g_compute_trace_enabled = false;
+}
+
+bool PE::isComputeTraceEnabled() {
+    return g_compute_trace_enabled;
 }
 
 
@@ -112,7 +185,7 @@ void PE::receive() {
     }
     
 }
-void PE::cycle() {
+void PE::cycle(uint64_t cycle) {
     idle = true; // Reset idle state at the start of the cycle
 
     if (!receivedA.isEmpty() || !receivedB.isEmpty() || !PsumOut.isEmpty()) {
@@ -122,10 +195,24 @@ void PE::cycle() {
     if (!receivedA.isEmpty() && !receivedB.isEmpty()) {
         DataPackage valueA = receivedA.front();
         DataPackage valueB = receivedB.front();
-        if (valueA.index2 == valueB.index1) {
+            if (valueA.index2 == valueB.index1) {
             DataPackage result = DataPackage(valueA.value * valueB.value, valueA.index1, valueB.index2);
             PsumOut.push(result);
             out << "PE (" << r << ", " << c << ") computed multiplication: " << valueA.value << " * " << valueB.value << " = " << result.value << " \t index1: " << valueA.index1 << " \t index2: " << valueB.index2 << "\n";
+            // Emit compute trace (1 multiply -> count as 1 FLOP for multiply; adjust if you count MACs)
+            uint64_t ts_ns = (cycle * 1000000000ULL) / PE::kClockFrequencyHz;
+            if (g_compute_trace_agg_enabled) {
+                g_compute_agg_flops += 1;
+                g_compute_agg_events += 1;
+                if (g_compute_agg_first_ts == 0 || ts_ns < g_compute_agg_first_ts) g_compute_agg_first_ts = ts_ns;
+                if (ts_ns > g_compute_agg_last_ts) g_compute_agg_last_ts = ts_ns;
+            }
+            if (g_compute_trace_enabled && g_compute_trace_fp) {
+                std::fprintf(g_compute_trace_fp, "%llu,%d,%d,COMPUTE,%d,%d,%d,%lld\n",
+                             static_cast<unsigned long long>(ts_ns), r, c, 1, valueA.index1, valueB.index2,
+                             static_cast<long long>(result.value));
+                std::fflush(g_compute_trace_fp);
+            }
             sendBottom();
             sendRight();
             receivedA.pop();
@@ -193,4 +280,8 @@ void PE::printEnergy(std::ostream& out) const {
     out << "Sends: " << sends << "\n";
     out << "Receives: " << receives << "\n";
     out << "Demux: " << demux << "\n";
+}
+
+uint64_t PE::getMultiplyCount() const {
+    return multiplies;
 }

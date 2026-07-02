@@ -303,24 +303,20 @@ num_iterations = expm_negative_taylor_iterations(A_diag_real, A_diag_imag, delta
 
 # Extract only the real part of the Hamiltonian
 H_real = H_array.real
-H_imag = H_array.imag
 
 # Save dense real matrix as text
 np.savetxt("/mnt/beegfs/ysu34/nouse/"+ HDF5_KEY +"_iterations_" + str(num_iterations) + ".txt", H_real, fmt="%.6f", delimiter=",")
 
 # # Save sparse format (non-zero real entries only)
 file = "/mnt/beegfs/ysu34/nouse/"+ HDF5_KEY  + "_sparse.txt"
-count_imag = 0
 with open(file, "w") as f:
     #f.write("iterations: " + str(num_iterations) + "\n")
     for i in range(H_real.shape[0]):
         for j in range(H_real.shape[1]):
             val = H_real[i, j]
-            if H_imag[i, j] == 0:
-                count_imag += 1
             if abs(val) > 1e-12:  # consider as non-zero
                 f.write(f"({i},{j}): {val:.6f}\n")
-print(f"Saved sparse real matrix to: {file} (ignored {count_imag} non-zero imaginary entries)")
+
 # nnz, nonzero_diagonal_count, offsets, sparsity = analyze_matrix_sparsity(H_array)
 # print(f"Matrix sparsity analysis for {HDF5_KEY}:")
 # print(f"\tNumber of non-zero elements (NNZ): {nnz}")

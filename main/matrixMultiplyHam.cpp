@@ -1,9 +1,9 @@
-#include "./include/Grid.h"
-#include "./include/Connection.h"
-#include "./include/TreeReducer.h"
-#include "./include/Utility.h"
-#include "./include/Cache.h"
-#include "./include/DiagonalReduction.h"
+#include "../include/Grid.h"
+#include "../include/Connection.h"
+#include "../include/TreeReducer.h"
+#include "../include/Utility.h"
+#include "../include/Cache.h"
+#include "../include/DiagonalReduction.h"
 
 #include <iostream>
 #include <vector>
@@ -225,7 +225,7 @@ int run_test_case( const std::vector<int>& A_offsets, const std::vector<int>& B_
             if (top_in[i]->pendingSrc()) injection_done = false;
         }
 
-        grid.cycle();
+    grid.cycle(cycle);
         //reducer.cycle();
         //std::cout << "Grid state after cycle " << cycle << ":\n";
         if(injection_done && grid.isIdle()) {

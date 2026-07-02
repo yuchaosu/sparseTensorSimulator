@@ -3,13 +3,18 @@
 
 #include <iostream>
 #include <optional>
+#include <cstdint>
 #include "Utility.h"
 #include "Fifo.h"
 #include "Connection.h"
+#include <cstdio>
+#include <string>
 
 class PE {
 public:
     PE(int row = 0, int col = 0, std::ostream& output_stream = std::cout);
+
+    static constexpr uint64_t kClockFrequencyHz = 700000000ULL;
 
     void receive();
     void send();
@@ -34,12 +39,23 @@ public:
     //void sendTransfer();
     //void sendReceivedPsum();
 
-    void cycle();
+    void cycle(uint64_t cycle);
 
     bool isIdle() const;
     void setIdle(bool idle);
 
+    uint64_t getMultiplyCount() const;
+
     void printEnergy(std::ostream& out) const;
+
+    // Compute tracing (optional)
+    static void enableComputeTrace(const std::string& path);
+    static void disableComputeTrace();
+    static bool isComputeTraceEnabled();
+    // Aggregate compute tracing (compact counters)
+    static void enableComputeTraceAggregate(const std::string& path);
+    static void disableComputeTraceAggregate();
+    static bool isComputeTraceAggregateEnabled();
 
     Connection* getBottomConnection();
     Connection* getRightConnection();
@@ -73,7 +89,7 @@ public:
     bool handshake_finished_bottom = false; // Indicates if the handshake is finished
     int pre_leftIndex;
     int pre_topIndex;
-    int multiplies = 0; // Number of multiplications performed
+    uint64_t multiplies = 0; // Number of multiplications performed
     int compares = 0; // Number of comparisons performed
     int sends = 0; // Number of sends performed
     int receives = 0; // Number of receives performed

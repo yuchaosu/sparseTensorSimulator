@@ -103,10 +103,10 @@ void Grid::setOutputConnections(std::vector<Connection*> output_connections) {
         pes[rows - 1][j]->setBottomConnection(output_connections[j]);
 }
 
-void Grid::cycle() {
+void Grid::cycle(uint64_t cycle) {
     for (int i = 0; i < rows; ++i){
         for (int j = 0; j < cols; ++j) {
-            pes[i][j]->cycle();
+            pes[i][j]->cycle(cycle);
         }
     }
 
