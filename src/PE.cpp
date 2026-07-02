@@ -17,6 +17,7 @@ static FILE* g_compute_trace_fp = nullptr;
 static bool g_compute_trace_agg_enabled = false;
 static FILE* g_compute_trace_agg_fp = nullptr;
 static uint64_t g_compute_agg_flops = 0;
+static uint64_t g_total_multiplies = 0;   // always-on scalar-multiply counter (debug)
 static uint64_t g_compute_agg_events = 0;
 static uint64_t g_compute_agg_first_ts = 0;
 static uint64_t g_compute_agg_last_ts = 0;
@@ -29,7 +30,7 @@ void PE::enableComputeTrace(const std::string& path) {
         g_compute_trace_enabled = false;
         return;
     }
-    std::fprintf(g_compute_trace_fp, "timestamp_ns,pe_r,pe_c,evt,flops,idx1,idx2,result\n");
+    std::fprintf(g_compute_trace_fp, "timestamp_ns,pe_r,pe_c,evt,flops,idx1,idx2,k\n");
     std::fflush(g_compute_trace_fp);
     g_compute_trace_enabled = true;
 }
@@ -67,6 +68,8 @@ void PE::disableComputeTraceAggregate() {
 bool PE::isComputeTraceAggregateEnabled() {
     return g_compute_trace_agg_enabled;
 }
+
+uint64_t PE::totalMultiplies() { return g_total_multiplies; }
 
 void PE::disableComputeTrace() {
     if (!g_compute_trace_enabled) return;
@@ -229,9 +232,9 @@ void PE::cycle(uint64_t cycle) {
                     if (ts_ns > g_compute_agg_last_ts) g_compute_agg_last_ts = ts_ns;
                 }
                 if (g_compute_trace_enabled && g_compute_trace_fp) {
-                    std::fprintf(g_compute_trace_fp, "%llu,%d,%d,COMPUTE,%d,%d,%d,%lld\n",
+                    std::fprintf(g_compute_trace_fp, "%llu,%d,%d,COMPUTE,%d,%d,%d,%d\n",
                                  static_cast<unsigned long long>(ts_ns), r, c, 1, valueA.index1, valueB.index2,
-                                 static_cast<long long>(result.value));
+                                 valueA.index2);   // last col = contraction index k (= A.index2 = B.index1)
                     std::fflush(g_compute_trace_fp);
                 }
                 if (!last_row) sendBottom();
@@ -239,6 +242,7 @@ void PE::cycle(uint64_t cycle) {
                 receivedA.pop();
                 receivedB.pop();
                 multiplies++;
+                ++g_total_multiplies;
                 compares++;
                 demux++;
             } // else: stall until both downstream links are free

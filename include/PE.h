@@ -56,6 +56,7 @@ public:
     static void enableComputeTraceAggregate(const std::string& path);
     static void disableComputeTraceAggregate();
     static bool isComputeTraceAggregateEnabled();
+    static uint64_t totalMultiplies();   // global count of scalar multiplies (debug)
 
     Connection* getBottomConnection();
     Connection* getRightConnection();

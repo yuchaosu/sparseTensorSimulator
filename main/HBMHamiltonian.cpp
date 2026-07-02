@@ -724,10 +724,18 @@ int main(int argc, char* argv[]) {
     } catch (...) {
         std::cerr << "Warning: failed to enable HBM aggregate trace at " << hbm_trace_path << ".aggregate.csv\n";
     }
-    PE::enableComputeTraceAggregate(compute_trace_path + ".aggregate.csv");
+    if (args.count("optrace")) {
+        PE::enableComputeTrace(args["optrace"]);   // debug: per-multiply (i,j,result) trace
+    } else {
+        PE::enableComputeTraceAggregate(compute_trace_path + ".aggregate.csv");
+    }
 
     std::ofstream out;
-    out.setstate(std::ios_base::failbit);
+    if (args.count("log")) {            // debug: dump full per-cycle PE trace
+        out.open(args["log"]);
+    } else {
+        out.setstate(std::ios_base::failbit);
+    }
     std::ofstream Energyout(folder + output_name +".power");
 
     std::string filenameA = basePath + filename;

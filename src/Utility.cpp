@@ -165,6 +165,13 @@ std::vector<std::vector<DataPackage>> buildDatapackage(std::map<int, std::vector
         for (const auto& [val, i, j] : vals) {
             packages.emplace_back(val, i, j);
         }
+        // The systolic merge requires each diagonal stream to be sorted by the
+        // contraction index. Intermediate results can be stored in arrival
+        // (unsorted) order when several tiles contribute to one diagonal, so
+        // sort every diagonal by row (index1) here — for an A diagonal this
+        // orders index2, for a B diagonal it orders index1, both ascending.
+        std::sort(packages.begin(), packages.end(),
+                  [](const DataPackage& a, const DataPackage& b) { return a.index1 < b.index1; });
         result.emplace_back(packages);
     }
     std::sort(result.begin(), result.end(), [](const std::vector<DataPackage>& a, const std::vector<DataPackage>& b) {
