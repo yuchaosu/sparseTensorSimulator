@@ -15,12 +15,14 @@
 #include <future>
 #include <iomanip>
 #include <iostream>
+#include <list>
 #include <map>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 using GroupData = std::map<int, std::vector<std::tuple<double, int, int>>>;
@@ -30,6 +32,9 @@ constexpr uint32_t kNumHBMChannels = 8;
 constexpr uint64_t kBurstBytes = 64;
 constexpr uint64_t kRowBytes = 2048;
 constexpr uint64_t kChannelRowSpan = kRowBytes * kNumHBMChannels;
+// SOTA HBM4 stack peak bandwidth (config/hbm4_sota.yaml: 2.048 TB/s = 2048 B/ns).
+// Used only for the bulk scratchpad-spill cost estimate (see streamBytes).
+constexpr double kHBM4PeakBytesPerNs = 2048.0;
 
 uint64_t alignTo(uint64_t value, uint64_t alignment) {
     if (alignment == 0) {
@@ -185,13 +190,23 @@ public:
         issueTransfers(alloc, sizeBytes, true);
     }
 
+    // Model a bulk scratchpad spill/refill of `sizeBytes` (data stays in SRAM for
+    // correctness; only the HBM cost is charged). Per-burst cycle-accurate replay
+    // through Ramulator is prohibitively slow for GB-scale spill, and a bulk
+    // sequential spill is bandwidth-bound, so charge the bytes and a peak-BW time
+    // estimate. (The per-tile operand/write-back traffic still uses Ramulator.)
+    void streamBytes(size_t sizeBytes, bool isWrite) {
+        if (isWrite) bytesWritten += sizeBytes; else bytesRead += sizeBytes;
+        spillNs += static_cast<uint64_t>(static_cast<double>(sizeBytes) / kHBM4PeakBytesPerNs);
+    }
+
     void erase(int groupIndex) {
         allocations.erase(groupIndex);
         storage.erase(groupIndex);
     }
 
     uint64_t getTotalCycles() const {
-        return totalCycles;
+        return totalCycles + spillNs;
     }
 
     void printStats(std::ostream& os) const {
@@ -222,7 +237,7 @@ public:
     };
 
     Stats getStats() const {
-        return Stats{bytesRead, bytesWritten, totalCycles};
+        return Stats{bytesRead, bytesWritten, totalCycles + spillNs};
     }
 
 private:
@@ -306,6 +321,7 @@ private:
     uint64_t bytesRead;
     uint64_t bytesWritten;
     int requestId;
+    uint64_t spillNs = 0;   // accumulated analytic time for bulk scratchpad spills
 };
 
 class HBMScheduler {
@@ -326,6 +342,99 @@ public:
 
 private:
     HBMMemory& memory;
+};
+
+// Byte-budgeted, write-back on-chip C scratchpad. The accumulated C data always
+// lives on-chip (in `data_`, for correctness), but only groups whose total size
+// fits within the budget are "resident"; touching a non-resident group refills
+// it from HBM (spill read) and evicting a dirty group writes it back (spill
+// write). This bounds on-chip C to the scratchpad budget and charges the real
+// HBM traffic when the working set overflows. Set the budget each row via
+// setBudget() (scratchpad minus the A double-buffer + resident B reservation).
+class CScratchpad {
+public:
+    CScratchpad(HBMMemory& hbm, size_t totalBytes) : hbm_(hbm), total_(totalBytes) {}
+
+    // Reserve part of the scratchpad for A/B buffers; C uses the remainder.
+    void setReserved(size_t bytes) {
+        reserved_ = bytes;
+        budget_ = reserved_ < total_ ? total_ - reserved_ : 0;
+        evictToBudget();
+    }
+
+    // Access a C group for read-modify-accumulate. Handles residency/spill and
+    // returns a mutable reference to the authoritative on-chip data.
+    GroupData& access(int gidx) {
+        auto it = resident_.find(gidx);
+        if (it != resident_.end()) {
+            lru_.erase(it->second.pos);
+            lru_.push_front(gidx);
+            it->second.pos = lru_.begin();
+            return data_[gidx];
+        }
+        GroupData& gd = data_[gidx];              // creates zero-size if brand new
+        if (everEvicted_.count(gidx)) {           // real reload from HBM
+            hbm_.streamBytes(computeGroupBytes(gd), /*isWrite=*/false);
+            spillReads_++;
+        }
+        lru_.push_front(gidx);
+        Entry e;
+        e.pos = lru_.begin();
+        e.bytes = computeGroupBytes(gd);
+        curBytes_ += e.bytes;
+        resident_[gidx] = e;
+        evictToBudget();
+        return data_[gidx];
+    }
+
+    // Refresh the accounted size of a group after it grew (accumulation may add
+    // entries), then re-check the budget.
+    void updateSize(int gidx) {
+        auto it = resident_.find(gidx);
+        if (it == resident_.end()) return;
+        size_t nb = computeGroupBytes(data_[gidx]);
+        curBytes_ += nb - it->second.bytes;
+        it->second.bytes = nb;
+        evictToBudget();
+    }
+
+    const std::map<int, GroupData>& groups() const { return data_; }
+    size_t peakResidentBytes() const { return peakBytes_; }
+    size_t peakTotalBytes() const { return peakTotal_; }   // reserved + resident C
+    uint64_t spillReads() const { return spillReads_; }
+    uint64_t spillWrites() const { return spillWrites_; }
+
+private:
+    struct Entry { std::list<int>::iterator pos; size_t bytes; };
+
+    void evictToBudget() {
+        peakBytes_ = std::max(peakBytes_, curBytes_);
+        peakTotal_ = std::max(peakTotal_, reserved_ + curBytes_);
+        // Keep at least one group resident to guarantee progress.
+        while (curBytes_ > budget_ && lru_.size() > 1) {
+            int victim = lru_.back();
+            lru_.pop_back();
+            auto it = resident_.find(victim);
+            hbm_.streamBytes(it->second.bytes, /*isWrite=*/true);  // write-back
+            spillWrites_++;
+            everEvicted_.insert(victim);
+            curBytes_ -= it->second.bytes;
+            resident_.erase(it);
+        }
+    }
+
+    HBMMemory& hbm_;
+    size_t total_ = SIZE_MAX;      // full scratchpad size
+    size_t reserved_ = 0;          // bytes reserved for A/B buffers
+    size_t budget_ = SIZE_MAX;     // bytes available for C (= total_ - reserved_)
+    std::map<int, GroupData> data_;                 // authoritative full C
+    std::list<int> lru_;                            // MRU front
+    std::unordered_map<int, Entry> resident_;
+    std::unordered_set<int> everEvicted_;
+    size_t curBytes_ = 0;
+    size_t peakBytes_ = 0;
+    size_t peakTotal_ = 0;
+    uint64_t spillReads_ = 0, spillWrites_ = 0;
 };
 
 } // namespace
@@ -415,7 +524,7 @@ int run_test_case( const std::vector<int>& A_offsets, const std::vector<int>& B_
                     std::map<int, std::vector<std::tuple<double, int, int>>>& A_diag,
                     std::map<int, std::vector<std::tuple<double, int, int>>>& B_diag,
                     HBMScheduler& scheduler, int C_base, std::unordered_map<int, int> C_offset_to_group,
-                    std::map<int, GroupData>& C_scratch,
+                    CScratchpad& C_scratch,
                     std::ofstream& out, std::ofstream& Energyout) {
 
     int COL = A_offsets.size();
@@ -536,7 +645,8 @@ int run_test_case( const std::vector<int>& A_offsets, const std::vector<int>& B_
     // per group at the end of the iteration.)
     GroupData result = grid.getResults();
     for (const auto& [offset, entries] : result) {
-        GroupData& groupData = C_scratch[C_offset_to_group.at(offset) + C_base];
+        const int gidx = C_offset_to_group.at(offset) + C_base;
+        GroupData& groupData = C_scratch.access(gidx);   // residency/spill handled here
         auto& vec = groupData[offset];
         for (const auto& [value, i, j] : entries) {
             bool found = false;
@@ -545,6 +655,7 @@ int run_test_case( const std::vector<int>& A_offsets, const std::vector<int>& B_
             }
             if (!found) vec.emplace_back(value, i, j);
         }
+        C_scratch.updateSize(gidx);   // group may have grown
     }
     grid.printEnergy(Energyout);
     out << "Total Cycles: " << cycle << "\n";
@@ -662,6 +773,7 @@ int main(int argc, char* argv[]) {
     double total_hidden_ns = 0.0;    // DRAM load hidden behind compute via prefetch
     size_t scratchpad_peak_bytes = 0;
     bool scratchpad_overflow = false;
+    uint64_t c_spill_reads = 0, c_spill_writes = 0;
 
     for (int k = 0; k < iterations; ++k) {
         std::cout << "Iteration" << k << ":\n";
@@ -686,12 +798,9 @@ int main(int argc, char* argv[]) {
 
         C_base = A_base + 1000;
 
-        // C is accumulated in the on-chip scratchpad, initialised (zeros) from
-        // the split C diagonals — no per-iteration HBM pre-store of C.
-        std::map<int, GroupData> C_scratch;
-        for (const auto& [groupIndex, groupDataRaw] : C_diag_groups) {
-            C_scratch[C_base + groupIndex] = GroupData(groupDataRaw.begin(), groupDataRaw.end());
-        }
+        // C is accumulated in the byte-budgeted on-chip scratchpad; groups that
+        // don't fit spill to HBM (write-back) and are refilled on next touch.
+        CScratchpad C_scratch(hbmMemory, kScratchpadBytes);
 
         size_t maxA_bytes = 0, maxB_bytes = 0;  // largest A/B tile (sizes the buffers)
 
@@ -726,6 +835,9 @@ int main(int argc, char* argv[]) {
             maxA_bytes = std::max(maxA_bytes, computeGroupBytes(A_diag_local));
             auto A_offsets_local = rebuildOffsets(A_diag_local);
 
+            // Reserve the A double-buffer (2x) + resident B; C uses the rest.
+            C_scratch.setReserved(2 * maxA_bytes + B_resident_bytes);
+
             double row_compute_ns = 0.0;
             for (int j = 0; j < static_cast<int>(B_diag_groups.size()); ++j) {
                 const auto& B_diag_local = B_resident[j];       // resident, no HBM load
@@ -752,14 +864,14 @@ int main(int argc, char* argv[]) {
             prev_row_compute_ns = row_compute_ns;
         }
 
-        // Scratchpad occupancy: A double buffer (ping-pong => 2x) + resident B
-        // + resident C accumulation region.
+        // Scratchpad occupancy: A double buffer (2x) + resident B + the
+        // budget-bounded resident C region. C beyond the budget is spilled to
+        // HBM (counted in the HBM stats), so peak on-chip use stays <= budget.
         (void)maxB_bytes;
-        size_t cBytes = 0;
-        for (const auto& [gidx, gd] : C_scratch) cBytes += computeGroupBytes(gd);
-        size_t sp_bytes = 2 * maxA_bytes + B_resident_bytes + cBytes;
-        scratchpad_peak_bytes = std::max(scratchpad_peak_bytes, sp_bytes);
-        if (sp_bytes > kScratchpadBytes) scratchpad_overflow = true;
+        scratchpad_peak_bytes = std::max(scratchpad_peak_bytes, C_scratch.peakTotalBytes());
+        if (C_scratch.spillWrites() > 0) scratchpad_overflow = true;  // C didn't fully fit
+        c_spill_reads += C_scratch.spillReads();
+        c_spill_writes += C_scratch.spillWrites();
 
         for (int i =0; i < old_size_A; ++i) {
             hbmMemory.erase(old_A_base + i);
@@ -770,9 +882,8 @@ int main(int argc, char* argv[]) {
         }
         C_offsets.clear();
         results.clear();
-        // Read the finalised C straight from the on-chip scratchpad (no HBM load).
-        for (const auto& [groupIndex, groupDataRaw] : C_diag_groups) {
-            const GroupData& groupData = C_scratch.at(C_base + groupIndex);
+        // Read the finalised C from the scratchpad (all accumulated groups).
+        for (const auto& [gidx, groupData] : C_scratch.groups()) {
             for (const auto& [offset, entries] : groupData) {
                 // Tolerance-based zero test: treat |v| <= kZeroTol as zero so the
                 // surviving-diagonal set is stable under FP accumulation order.
@@ -797,7 +908,7 @@ int main(int argc, char* argv[]) {
             ref = denseMatMul(ref, denseH, size);
             double maxAbsDiff = 0.0;
             long mismatches = 0;
-            compareDense(ref, C_scratch, size, 1e-6, maxAbsDiff, mismatches);
+            compareDense(ref, C_scratch.groups(), size, 1e-6, maxAbsDiff, mismatches);
             std::cout << "[verify] iter " << k << ": "
                       << (mismatches == 0 ? "PASS" : "FAIL")
                       << " (max_abs_diff=" << maxAbsDiff
@@ -889,9 +1000,18 @@ int main(int argc, char* argv[]) {
     std::cout << std::setprecision(6);
 
     std::cout << "Edge scratchpad: " << (kScratchpadBytes / 1024) << " KiB budget, peak use "
-              << (scratchpad_peak_bytes / 1024.0) << " KiB"
-              << (scratchpad_overflow ? "  [OVERFLOW: working set exceeds scratchpad]" : "")
-              << "\n";
+              << (scratchpad_peak_bytes / 1024.0) << " KiB";
+    if (scratchpad_overflow) {
+        std::cout << "  [C spilled to HBM: " << c_spill_writes << " write-backs, "
+                  << c_spill_reads << " refills"
+                  << (scratchpad_peak_bytes > kScratchpadBytes
+                          ? "; A/B buffers + one C group still exceed budget — use larger SPM or smaller grid_col"
+                          : "")
+                  << "]";
+    } else {
+        std::cout << "  [fit on-chip]";
+    }
+    std::cout << "\n";
 
     std::cout << "Configuration:\n";
     std::cout << "Qubit Size: " << qubit_size << "\n";
