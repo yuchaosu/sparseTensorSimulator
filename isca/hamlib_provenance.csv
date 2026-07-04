@@ -1,0 +1,16 @@
+workload_file,family,num_qubits,matrix_dim_N,num_diagonals_D,n_taylor_K,hdf5_file,hdf5_key,key_status,final_time,num_timesteps,dt,method,fetch_script
+bh_18_5.txt,bh,18,262144,113,5,/mnt/beegfs/ysu34/hamlib/BH/BH.hdf5,bh_graph-1D-grid-nonpbc-qubitnodes_Lx-<L>_U-<U>_enc-<enc>_d-4,NEEDS_CONFIRM: Lx/U/enc not logged,1.2,1000,0.0012,dia,fetchham_dia.py
+bh_20_5.txt,bh,20,1048576,474,5,/mnt/beegfs/ysu34/hamlib/BH/BH.hdf5,bh_graph-1D-grid-nonpbc-qubitnodes_Lx-<L>_U-<U>_enc-<enc>_d-4,NEEDS_CONFIRM: Lx/U/enc not logged,1.2,1000,0.0012,dia,fetchham_dia.py
+bh_24_5.txt,bh,24,16777216,595,5,/mnt/beegfs/ysu34/hamlib/BH/BH.hdf5,bh_graph-1D-grid-nonpbc-qubitnodes_Lx-<L>_U-<U>_enc-<enc>_d-4,NEEDS_CONFIRM: Lx/U/enc not logged,1.2,1000,0.0012,dia,fetchham_dia.py
+heis_18_5.txt,heis,18,262144,35,5,/mnt/beegfs/ysu34/hamlib/heis/heis.hdf5,graph-1D-grid-nonpbc-qubitnodes_Lx-18_h-<H>,NEEDS_CONFIRM: field h not logged,1.2,1000,0.0012,dia,fetchham_dia.py
+heis_20_6.txt,heis,20,1048576,39,6,/mnt/beegfs/ysu34/hamlib/heis/heis.hdf5,graph-1D-grid-nonpbc-qubitnodes_Lx-20_h-<H>,NEEDS_CONFIRM: field h not logged,1.2,1000,0.0012,dia,fetchham_dia.py
+heis_22_6.txt,heis,22,4194304,43,6,/mnt/beegfs/ysu34/hamlib/heis/heis.hdf5,graph-1D-grid-nonpbc-qubitnodes_Lx-22_h-<H>,NEEDS_CONFIRM: field h not logged,1.2,1000,0.0012,dia,fetchham_dia.py
+heis_24_6.txt,heis,24,16777216,47,6,/mnt/beegfs/ysu34/hamlib/heis/heis.hdf5,graph-1D-grid-nonpbc-qubitnodes_Lx-24_h-<H>,NEEDS_CONFIRM: field h not logged,1.2,1000,0.0012,dia,fetchham_dia.py
+heis_26_6.txt,heis,26,67108864,51,6,/mnt/beegfs/ysu34/hamlib/heis/heis.hdf5,graph-1D-grid-nonpbc-qubitnodes_Lx-26_h-<H>,NEEDS_CONFIRM: field h not logged,1.2,1000,0.0012,dia,fetchham_dia.py
+heis_28_6.txt,heis,28,268435456,55,6,/mnt/beegfs/ysu34/hamlib/heis/heis.hdf5,graph-1D-grid-nonpbc-qubitnodes_Lx-28_h-<H>,NEEDS_CONFIRM: field h not logged,1.2,1000,0.0012,dia,fetchham_dia.py
+tfim_18_4.txt,tfim,18,262144,1,4,/mnt/beegfs/ysu34/hamlib/tfim/tfim.hdf5,graph-1D-grid-nonpbc-qubitnodes_Lx-18_h-0,resolved (D=1 => diagonal-only => h=0),1.2,1000,0.0012,dia,fetchham_dia.py
+tfim_20_5.txt,tfim,20,1048576,1,5,/mnt/beegfs/ysu34/hamlib/tfim/tfim.hdf5,graph-1D-grid-nonpbc-qubitnodes_Lx-20_h-0,resolved (D=1 => diagonal-only => h=0),1.2,1000,0.0012,dia,fetchham_dia.py
+tfim_22_5.txt,tfim,22,4194304,1,5,/mnt/beegfs/ysu34/hamlib/tfim/tfim.hdf5,graph-1D-grid-nonpbc-qubitnodes_Lx-22_h-0,resolved (D=1 => diagonal-only => h=0),1.2,1000,0.0012,dia,fetchham_dia.py
+tfim_24_5.txt,tfim,24,16777216,1,5,/mnt/beegfs/ysu34/hamlib/tfim/tfim.hdf5,graph-1D-grid-nonpbc-qubitnodes_Lx-24_h-0,resolved (D=1 => diagonal-only => h=0),1.2,1000,0.0012,dia,fetchham_dia.py
+tfim_26_5.txt,tfim,26,67108864,1,5,/mnt/beegfs/ysu34/hamlib/tfim/tfim.hdf5,graph-1D-grid-nonpbc-qubitnodes_Lx-26_h-0,resolved (D=1 => diagonal-only => h=0),1.2,1000,0.0012,dia,fetchham_dia.py
+tfim_28_5.txt,tfim,28,268435456,1,5,/mnt/beegfs/ysu34/hamlib/tfim/tfim.hdf5,graph-1D-grid-nonpbc-qubitnodes_Lx-28_h-0,resolved (D=1 => diagonal-only => h=0),1.2,1000,0.0012,dia,fetchham_dia.py

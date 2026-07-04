@@ -21,6 +21,8 @@ Wzh/hbm/debug
 *.swp
 *.err
 *.csv
+# ...but the HamLib provenance CSV is a tracked reproducibility artifact, not generated output.
+!isca/hamlib_provenance.csv
 
 # Large generated Hamiltonian / feature dumps
 *.txt
