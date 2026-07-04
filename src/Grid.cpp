@@ -2,13 +2,13 @@
 #include <cassert>
 #include <iostream>
 
-Grid::Grid(int rows, int cols, std::vector<DiagonalReduction*>& diagonal_reductions, std::vector<std::vector<int>> reduction_map, std::ostream& output_stream) : 
+Grid::Grid(int rows, int cols, std::vector<DiagonalReduction*>& diagonal_reductions, std::vector<std::vector<int>> reduction_map, std::ostream& output_stream, size_t fifo_depth) :
             rows(rows), cols(cols), out(output_stream), diagonalReductions(diagonal_reductions), reductionMap(reduction_map) {
     pes.resize(rows, std::vector<PE*>(cols, nullptr));
 
     for (int i = 0; i < rows; ++i)
         for (int j = 0; j < cols; ++j) {
-            pes[i][j] = new PE(i, j, out);
+            pes[i][j] = new PE(i, j, out, fifo_depth);
             // Boundary PEs drain their pass-through operand instead of forwarding
             // it to a non-existent neighbour (last col: no right PE; last row:
             // bottom connects to a DiagonalReduction that only consumes psum).

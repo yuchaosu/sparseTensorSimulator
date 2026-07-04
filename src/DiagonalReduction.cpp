@@ -3,6 +3,11 @@
 
 DiagonalReduction::DiagonalReduction(int index, std::ostream& output_stream) : index(index), out(output_stream) {}
 
+// True global accumulation counter (psum adds across all reduction units).
+static uint64_t g_act_accumulate = 0;
+void     DiagonalReduction::resetAccumulation() { g_act_accumulate = 0; }
+uint64_t DiagonalReduction::accumulationCount() { return g_act_accumulate; }
+
 void DiagonalReduction::cycle() {
     for (auto* conn : diagonalPorts) {
         if (conn == nullptr) {
@@ -16,7 +21,7 @@ void DiagonalReduction::cycle() {
             out << "DiagonalReduction " << index << " received psum: " << psum.value 
                 << " at index (" << psum.index1 << ", " << psum.index2 << ") -> Total: " 
                 << diagonal[key] << "\n";
-            reduction++;
+            reduction++; g_act_accumulate++;
         }
     }
 }

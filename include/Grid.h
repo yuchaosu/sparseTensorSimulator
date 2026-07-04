@@ -8,7 +8,7 @@
 
 class Grid {
 public:
-    Grid(int rows, int cols, std::vector<DiagonalReduction*>& diagonalReductions, std::vector<std::vector<int>> reductionMap, std::ostream& out);
+    Grid(int rows, int cols, std::vector<DiagonalReduction*>& diagonalReductions, std::vector<std::vector<int>> reductionMap, std::ostream& out, size_t fifo_depth = 20000);
     ~Grid();
 
     void setInputConnections(std::vector<Connection*> top_connections, 

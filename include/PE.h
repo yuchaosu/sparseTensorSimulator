@@ -12,7 +12,8 @@
 
 class PE {
 public:
-    PE(int row = 0, int col = 0, std::ostream& output_stream = std::cout);
+    PE(int row = 0, int col = 0, std::ostream& output_stream = std::cout,
+       size_t fifo_depth = 20000);
 
     static constexpr uint64_t kClockFrequencyHz = 700000000ULL;
 
@@ -57,6 +58,24 @@ public:
     static void disableComputeTraceAggregate();
     static bool isComputeTraceAggregateEnabled();
     static uint64_t totalMultiplies();   // global count of scalar multiplies (debug)
+
+    // ---- True (measured) activity counters, aggregated across all PEs, for the
+    // per-component energy/cycle breakdown. Every increment happens inside the real
+    // cycle-accurate datapath (not a formula): MAC on a match, compare on every
+    // comparator eval, router on each neighbour/psum send, buffer read/write on each
+    // FIFO pop/push. resetActivity() zeroes them before a run.
+    static void     resetActivity();
+    static uint64_t macCount();       // matches -> multiply-accumulate
+    static uint64_t compareCount();   // merge-join comparator evaluations
+    static uint64_t routerCount();    // inter-PE forwards + psum sends (NoC hops)
+    static uint64_t bufWriteCount();  // FIFO pushes (operand/psum in)
+    static uint64_t bufReadCount();   // FIFO pops (operand/psum out)
+    // Peak input-FIFO occupancy (max of receivedA/receivedB size seen, in entries),
+    // used to justify the modeled fixed FIFO depth. Tracking is gated so an ideal
+    // (unbounded) baseline pass does not pollute the realistic peak.
+    static void resetPeakOccupancy();
+    static void setPeakTracking(bool on);
+    static uint64_t peakOccupancy();
 
     Connection* getBottomConnection();
     Connection* getRightConnection();

@@ -19,6 +19,8 @@ Wzh/hbm/debug
 *.png
 *.npy
 *.swp
+*.err
+*.csv
 
 # Large generated Hamiltonian / feature dumps
 *.txt
@@ -30,7 +32,14 @@ Wzh/hbm/debug
 with_h_data/supermarq/ghz/
 external/
 
+# ---- Baseline third-party simulators (STONNE, DiaBase, Flexagon/SST-STONNE) ----
+# Large upstream repos kept locally for comparison; not vendored into this repo.
+baselines/
+
 # generated sweep outputs
 isca/manifest.txt
 isca/sweep_results.csv
 isca/sweep_rows/
+isca/dia_manifest.txt
+isca/dia_results.csv
+isca/dia_rows/

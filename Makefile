@@ -60,6 +60,13 @@ HBMHamiltonian: $(COMMON_OBJS) $(RAM_OBJ)
 	@mkdir -p $(OUTDIR)
 	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) $(RAM_OBJ) main/HBMHamiltonian.cpp $(RAMLINK)
 
+# accel_compare: high-level driver comparing DIAMOND / TPU / Trapezoid on the shared PE mesh.
+# Links the SAME Ramulator 2.1 (SOTA HBM4) in-loop DRAM model as HBMHamiltonian so the
+# memory timing is real (per-burst), not a bandwidth shortcut.
+accel_compare: $(COMMON_OBJS) $(RAM_OBJ)
+	@mkdir -p $(OUTDIR)
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) $(RAM_OBJ) main/accel_compare.cpp $(RAMLINK)
+
 # HBMHamiltonianScheduled: link main source with scheduling heuristic
 HBMHamiltonianScheduled: $(COMMON_OBJS)
 	@mkdir -p $(OUTDIR)
