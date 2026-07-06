@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
         std::ofstream csv(args["csv"], std::ios::app);
         for (auto& r : rows)
             csv << file << ',' << qs << ',' << n << ',' << (S*S) << ',' << iter
-                << ',' << r.name << ',' << (r.ran ? "OK" : "OOM")
+                << ',' << '"' << r.name << '"' << ',' << (r.ran ? "OK" : "OOM")   // name has a comma
                 << ',' << (r.ran ? r.bd.real_cycles   : 0)
                 << ',' << (r.ran ? r.bd.compute_cycles : 0)
                 << ',' << (r.ran ? r.bd.mac     : 0)
