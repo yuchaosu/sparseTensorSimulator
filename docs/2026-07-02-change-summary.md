@@ -72,6 +72,30 @@ Covers all 35 HamLib matrices x grids {64,128,256} (q<=12) or {64} (q>=13), plus
 - `tools/roofline.py`: removed unjustified `oi*1.5` / `perf*0.7` fudge factors; error on the `time_s=1.0` placeholder; fixed the log-axis lower bound.
 - `helper/energyCal.py`: fixed the receive-energy double-count.
 
+## Per-PE FIFO vs edge scratchpad (buffering analysis)
+
+A Python model of the mesh dataflow (`scratchpad/dataflow_check.py`, 2-phase 1-hop/cycle) settled how the two on-chip buffers must be sized.
+
+> [!important] A small fixed per-PE FIFO deadlocks; the alignment buffer is the scratchpad
+> The comparator merge-join needs matching keys (`A.col == B.row`) that appear rows apart by the diagonal offset, so one stream leads the other by ~offset. The minimum deadlock-free buffer depth equals the **max diagonal offset ≈ n/2**, growing linearly with n (verified: n=32→16, 64→32, 128→64, 256→128). A tiny fixed FIFO therefore cannot absorb this skew — it deadlocks for any q≥8. That buffering is the job of the **edge scratchpad**, not the per-PE FIFO.
+
+Consequences in the model:
+
+- The **per-PE FIFO is a small static pipeline buffer** (reported constant, `-fifo`, default 16). It does not do skew backpressure.
+- The **edge scratchpad is the large buffer**; each run reports `pe_peak_occ` (peak per-PE staging, empirically ≈ `max_offset`) and `max_offset`, which size the scratchpad.
+- The comparator "missing one → forward existing" is only correct with the qualifier "**unless the other stream is exhausted**"; the literal form drops matches (shown WRONG in the model). The current logic (stall-unless-exhausted) computes `A@B` exactly.
+
+## Large-qubit inputs (HamLib OOM DIA build)
+
+- The driver now auto-detects and loads **DIA-format** matrices (`hamlib/dia_oom/<fam>_<q>_<K>.txt`, header `N <n> D <d>`), the ground-truth HamLib systems extracted by `fetchham_sparse_dia.py`. This is diagonal-native, so no dense reconstruction — it reaches q=18..28 (heis/tfim/bh). The legacy `(row,col): value` path is unchanged.
+- The sweep (`isca/submit_sweep.sh`) adds these up to `DIA_QMAX` (cycle-sim ceiling; memory + makespan grow ~2^q).
+
+## Correctness / performance fixes (this pass)
+
+- C-accumulation was `O(n^2)` (append + linear scan) — fine at q≤16, catastrophic at q≥18. Now `O(n)` via a `(row,col)` hash. This alone unblocked the large-q runs.
+- Missing/empty input is now fatal (`return 2`) instead of silently "passing" `-verify` (empty vs empty).
+- `PE::sendPsum()` no longer pops when the psum channel is still pending (latent silent-drop guard).
+
 ## Notes and follow-ups
 
 - Only `HBMHamiltonian` got the full treatment; `HBMHamiltonianScheduled` / `Prefetch` and the legacy `matrixMulti*` drivers were left as-is per scoping (they still compile and benefit from the shared PE dataflow fix).

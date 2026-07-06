@@ -45,3 +45,7 @@ isca/sweep_rows/
 isca/dia_manifest.txt
 isca/dia_results.csv
 isca/dia_rows/
+
+# Python cache / logs
+__pycache__/
+*.log
