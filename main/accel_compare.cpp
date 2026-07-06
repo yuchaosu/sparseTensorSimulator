@@ -6,6 +6,7 @@
 // Usage: accel_compare -file=synth_6_2.txt -qubit=6 -iter=2 -row=8   (row = S; PEs = S*S)
 #include <iostream>
 #include <iomanip>
+#include <fstream>
 #include <map>
 #include <string>
 #include <vector>
@@ -93,5 +94,24 @@ int main(int argc, char** argv) {
                   << " buf=" << r.bd.buf << " accum=" << r.bd.accum
                   << " hbm_ns=" << (long long)r.bd.dram_ns << " (exposed=" << (long long)r.bd.exposed_ns << ")"
                   << " bottleneck=" << r.bd.bottleneck << "\n";
+
+    // ---- optional CSV: raw per-baseline op counts for the (Verilog) energy model. One row
+    // per accelerator; OOM rows keep status=OOM with zeroed counts (capacity-crossover test).
+    if (args.count("csv")) {
+        const std::string qs = args.count("qubit") ? args["qubit"] : "";
+        std::ofstream csv(args["csv"], std::ios::app);
+        for (auto& r : rows)
+            csv << file << ',' << qs << ',' << n << ',' << (S*S) << ',' << iter
+                << ',' << r.name << ',' << (r.ran ? "OK" : "OOM")
+                << ',' << (r.ran ? r.bd.real_cycles   : 0)
+                << ',' << (r.ran ? r.bd.compute_cycles : 0)
+                << ',' << (r.ran ? r.bd.mac     : 0)
+                << ',' << (r.ran ? r.bd.compare : 0)
+                << ',' << (r.ran ? r.bd.router  : 0)
+                << ',' << (r.ran ? r.bd.buf     : 0)
+                << ',' << (r.ran ? r.bd.accum   : 0)
+                << ',' << (r.ran ? (long long)r.bd.dram_ns : 0)
+                << ',' << (r.ran ? r.bd.buffer_peak : 0) << '\n';
+    }
     return 0;
 }

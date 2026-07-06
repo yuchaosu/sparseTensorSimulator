@@ -884,39 +884,90 @@ static ConvDiag convMatmul(const ConvDiag& A, const ConvDiag& B, int n,
     return C;
 }
 
-// Cycle-accurate convolution ON the real PE array. Each (dA,dB) pair is one PE fed
-// its OFFSET-ALIGNED operand pair (A element row k paired with B element row k+dA),
-// so the existing merge-join PE::cycle() finds A.col==B.row on every head and does a
-// MAC + advance-both each cycle -- no index-search stalls. Makespan is the simulated
-// number of lockstep cycles, not a formula. This genuinely uses the Grid/PE hardware;
-// it is a small-q validation of the analytic conv model (same makespan expected).
-static ConvDiag convOnGrid(const ConvDiag& A, const ConvDiag& B, int n,
-                           bool zeroskip, long& cycles_out) {
+// Cycle-accurate convolution ON the real PE array with a FIXED S*S PE budget.
+//
+// Each valid (dA,dB) offset pair contributes a contiguous run of OFFSET-ALIGNED products
+// (A row k paired with B row k+dA). We materialize the active products (post-zeroskip),
+// assign them to the S*S PEs, then run the real merge-join PE::cycle() lockstep. Because
+// A.col == B.row on every fed head, each product MACs in one cycle, so a PE's cycle count
+// equals its queue length and the simulated makespan = the busiest PE (cycle-accurate, not
+// a formula).
+//
+// Two levers, both realized at this cycle-accurate level:
+//   L2 zeroskip : a zero product (a*b==0) never enters a PE queue -> fewer real MAC cycles.
+//   L3 cbalance : split long diagonals into equal contiguous chunks across ALL S*S PEs
+//                 (flexible-NoC distribution, SIGMA/Flexagon class) so no single PE owns the
+//                 length-n main diagonal. Without it, whole diagonals stay on one PE and the
+//                 longest one bounds the makespan.
+//
+// Router accounting (the flexible-NoC OVERHEAD that cbalance introduces): the base rigid
+// dataflow reduces each output diagonal LOCALLY (~0 extra hops). Splitting/spreading work
+// forces operand segments out to non-native PEs and partials back to per-diagonal
+// collectors. We charge, per emitted product, the Manhattan distance dist(p)=r+c of its
+// assigned PE from the corner collector (a per-flit NoC path length). base packs the big
+// diagonals onto low-dist PEs (near 0 extra hops); cbalance spreads across the whole mesh
+// (high hops) -- so router_out is exactly cbalance's routing cost, to be weighted in the
+// downstream (Verilog) energy model. accum_out = one accumulate per product.
+static ConvDiag convOnGrid(const ConvDiag& A, const ConvDiag& B, int n, int S,
+                           bool zeroskip, bool cbalance, long& cycles_out,
+                           long long& router_out, long long& accum_out,
+                           long long& nnz_out, int& maxoff_out) {
     static std::ofstream devnull;   // unopened: PE's out<< become cheap no-ops
+    const int P = std::max(1, S * S);
     auto toVec = [&](const ConvDiag& M) {
         std::unordered_map<int, std::vector<double>> v;
         for (const auto& [o, e] : M) { auto& a = v[o]; a.assign(n, 0.0); for (const auto& [val, r, c] : e) a[r] = val; }
         return v;
     };
     auto Av = toVec(A), Bv = toVec(B);
-    std::vector<std::unique_ptr<PE>> pes;
+
+    // 1) Flatten the active products; record per-pair spans so base can keep diagonals whole.
+    struct PRef { int dA, dB, k; };
+    std::vector<PRef> flat;
+    int maxoff = 0;
     for (const auto& [dA, va] : Av) {
         for (const auto& [dB, vb] : Bv) {
             const int dC = dA + dB;
             const int lo = std::max(0, std::max(-dA, -dC));
             const int hi = std::min(n, std::min(n - dA, n - dC));
             if (hi <= lo) continue;
-            auto pe = std::make_unique<PE>(0, 0, devnull, static_cast<size_t>(hi - lo) + 16);
-            pe->setLastRow(true); pe->setLastCol(true);   // boundary: drain, don't forward
+            const long long start = (long long)flat.size();
             for (int k = lo; k < hi; ++k) {
-                double a = va[k], b = vb[k + dA];
-                if (zeroskip && a * b == 0.0) continue;
-                pe->receivedA.push(DataPackage(a, k, k + dA));            // A: row k, col k+dA
-                pe->receivedB.push(DataPackage(b, k + dA, k + dA + dB));  // B: row k+dA, col k+dC
+                if (zeroskip && va[k] * vb[k + dA] == 0.0) continue;
+                flat.push_back({dA, dB, k});
             }
-            if (!pe->receivedA.isEmpty()) pes.push_back(std::move(pe));
+            if ((long long)flat.size() > start) maxoff = std::max(maxoff, std::abs(dC));
         }
     }
+    const long long total = (long long)flat.size();
+    maxoff_out = maxoff; nnz_out = total;
+
+    // 2) Assign products to PEs.
+    //   base (rigid systolic): each OUTPUT diagonal dC is reduced on ONE fixed PE (dC mod P),
+    //     matching the per-PE offset-space DiagonalReduction. The longest output diagonal is a
+    //     real hotspot -> it bounds the makespan (no load balancing).
+    //   cbalance (flexible NoC): equal contiguous chunks over ALL P PEs, splitting the long
+    //     diagonal across idle PEs (breaks dC-locality, which is why it costs gather routing).
+    std::vector<std::vector<long long>> peq(P);          // indices into flat
+    if (cbalance) {
+        const long long chunk = (total + P - 1) / P;
+        for (long long i = 0; i < total; ++i)
+            peq[std::min<long long>(P - 1, chunk ? i / chunk : 0)].push_back(i);
+    } else {
+        for (long long i = 0; i < total; ++i) {
+            int dC = flat[i].dA + flat[i].dB;
+            peq[((dC % P) + P) % P].push_back(i);
+        }
+    }
+
+    // 3) Router / accum counts. dist(p) = Manhattan hops of PE p from the corner collector.
+    auto dist = [S](int p){ return (long long)(p / S) + (long long)(p % S); };
+    long long router = 0;
+    for (int p = 0; p < P; ++p) router += dist(p) * (long long)peq[p].size();  // per-flit path length
+    router_out = router;
+    accum_out  = total;                                                        // one accumulate / product
+
+    // 4) Cycle-accurate run: feed each PE its products, MAC lockstep, makespan = busiest PE.
     std::unordered_map<int, std::unordered_map<int, double>> acc;   // dC -> row -> value
     auto drain = [&](PE& pe) {
         while (!pe.PsumOut.isEmpty()) {
@@ -924,6 +975,19 @@ static ConvDiag convOnGrid(const ConvDiag& A, const ConvDiag& B, int n,
             acc[p.index2 - p.index1][p.index1] += p.value;          // dC = col - row
         }
     };
+    std::vector<std::unique_ptr<PE>> pes;
+    for (int p = 0; p < P; ++p) {
+        if (peq[p].empty()) continue;
+        auto pe = std::make_unique<PE>(0, 0, devnull, peq[p].size() + 16);
+        pe->setLastRow(true); pe->setLastCol(true);   // boundary: drain, don't forward
+        for (long long idx : peq[p]) {
+            const PRef& pr = flat[idx];
+            double a = Av[pr.dA][pr.k], b = Bv[pr.dB][pr.k + pr.dA];
+            pe->receivedA.push(DataPackage(a, pr.k, pr.k + pr.dA));                     // A: row k, col k+dA
+            pe->receivedB.push(DataPackage(b, pr.k + pr.dA, pr.k + pr.dA + pr.dB));     // B: row k+dA, col k+dC
+        }
+        pes.push_back(std::move(pe));
+    }
     long cyc = 0; bool any = true;
     while (any) {
         any = false;
@@ -1604,6 +1668,7 @@ int main(int argc, char* argv[]) {
         };
         long long total_cyc = 0;
         long long total_work = 0;                         // total MAC work (for equal-PE compare)
+        long long total_router = 0, total_accum = 0;      // cycle-accurate op counts (grid path)
         const long long kSpmBudget = 2LL * 1024 * 1024;   // 2 MB edge scratchpad
         long long peak_footprint = 0;                     // peak on-chip bytes (report as spm_peak)
         long long conv_spill_events = 0;                  // # powers whose footprint spilled
@@ -1613,9 +1678,10 @@ int main(int argc, char* argv[]) {
             long ms = 0; long long nnz = 0; int moff = 0;
             ConvDiag C;
             long work = 0;
-            if (grid_conv) {                 // cycle-accurate on the real PE array
-                C = convOnGrid(current_diag, H_diag, size, zeroskip, ms);
-                for (const auto& [o, e] : C) moff = std::max(moff, std::abs(o));
+            if (grid_conv) {                 // cycle-accurate on the real PE array (S*S budget)
+                long long rt = 0, ac = 0;
+                C = convOnGrid(current_diag, H_diag, size, grid_row, zeroskip, cbalance, ms, rt, ac, nnz, moff);
+                total_router += rt; total_accum += ac; work = static_cast<long>(nnz);
             } else {                          // fast analytic model
                 C = convMatmul(current_diag, H_diag, size, zeroskip, cbalance, ms, nnz, moff, work, pe_budget);
             }
@@ -1673,12 +1739,17 @@ int main(int argc, char* argv[]) {
         const double mem_pct    = runtime_ns > 0 ? 100.0 * exposed_ns / runtime_ns : 0.0;
         const double hbm_tCK    = hbmMemory.tCK();
         const uint64_t hbm_dram_cycles = hbm_tCK > 0 ? static_cast<uint64_t>(dram_ns / hbm_tCK) : 0;
+        // Cycle-accurate op counts for the (Verilog) energy model. mac/compare are measured
+        // in the real PE datapath; router/accum are the flexible-NoC counts from convOnGrid.
+        const long long mac_ops     = static_cast<long long>(PE::macCount());
+        const long long compare_ops = static_cast<long long>(PE::compareCount());
         std::cout << std::fixed << std::setprecision(2)
-                  << "[conv] zeroskip=" << zeroskip << " balance=" << cbalance
-                  << " hermitian=" << hermitian << " fused=" << fused
-                  << " pe=" << pe_budget
-                  << " | compute " << total_cyc << " cyc, MAC work " << total_work
-                  << ", HBM " << (st.bytesRead + st.bytesWritten) / (1024.0 * 1024) << " MiB, mem-latency "
+                  << "[conv] zeroskip=" << zeroskip << " cbalance=" << cbalance
+                  << " pe=" << (grid_row * grid_col)
+                  << " | compute " << total_cyc << " cyc"
+                  << " | ops: mac=" << mac_ops << " cmp=" << compare_ops
+                  << " router=" << total_router << " accum=" << total_accum
+                  << " | HBM " << (st.bytesRead + st.bytesWritten) / (1024.0 * 1024) << " MiB, mem-latency "
                   << mem_pct << " %, max_offset " << max_abs_offset << "\n";
         std::cout.unsetf(std::ios::floatfield);
         if (!csv_path.empty()) {
@@ -1694,7 +1765,8 @@ int main(int argc, char* argv[]) {
                     << conv_spill_events << ',' << conv_spill_events << ','
                     << (verify ? (verify_all_pass ? "PASS" : "FAIL") : "n/a")
                     << ',' << dataflow << ',' << (zeroskip?1:0) << ',' << (cbalance?1:0)
-                    << ',' << (hermitian?1:0) << ',' << (fused?1:0) << '\n';
+                    << ',' << (hermitian?1:0) << ',' << (fused?1:0)
+                    << ',' << mac_ops << ',' << compare_ops << ',' << total_router << ',' << total_accum << '\n';
         }
         return total_cycles;
     }
