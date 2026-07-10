@@ -2,55 +2,50 @@ CXX = g++
 CXXFLAGS = -std=c++17 -O3 -Iinclude/ -Iexternal/
 # Uncomment for debugging
 #DEBUGFLAGS = -O0 -g
-#DEBUGFLAGS = -DDEBUG_MEM_OUTPUT -DDEBUG_MSWITCH_FUNC
 
-# Executable names (without paths)
-BINARIES = matrixMulti matrixMultiBlock matrixMultiBlockDiagonal matrixMultiHam
+# Executables: the DIAMOND accelerator driver + the baseline-comparison tool.
+BINARIES = diamond accel_compare
 
-# All shared .cpp sources in src/
-COMMON_SOURCES = $(wildcard src/*.cpp)
+# Ramulator 2.1 in-loop DRAM model (SOTA HBM4). The adapter TU must be built as
+# C++20 and linked against libramulator.so; everything else stays C++17.
+RAMULATOR_DIR = external/ramulator2
+RAM_SRC = src/RamulatorHBM.cpp
+RAM_OBJ = $(OBJSDIR)/RamulatorHBM.o
+RAMFLAGS = -std=c++20 -O3 -I$(RAMULATOR_DIR)/src
+RAM_CONFIG = $(abspath config/hbm4_sota.yaml)
+RAMLINK = -L$(RAMULATOR_DIR) -lramulator -Wl,-rpath,$(abspath $(RAMULATOR_DIR))
 
-# All headers
+# All shared .cpp sources in src/ (the Ramulator adapter is built separately as C++20)
+COMMON_SOURCES = $(filter-out $(RAM_SRC),$(wildcard src/*.cpp))
 INCLUDES = $(wildcard include/*.h)
-
-# Object directory
 OBJSDIR = objs
-
-# Output directory for executables
 OUTDIR = outputs
-
-# Common objects
 COMMON_OBJS = $(patsubst src/%, $(OBJSDIR)/%, $(patsubst %.cpp,%.o,$(COMMON_SOURCES)))
 
 .PHONY: all clean $(BINARIES)
 
-# Default target: build everything
 all: $(BINARIES)
 
-# matrixMulti: link main source
-matrixMulti: $(COMMON_OBJS)
+# diamond: the cycle-accurate DIAMOND accelerator (offset-space DIA convolution on the
+# S*S PE mesh, convOnGrid), DRAM modeled in-loop by Ramulator 2.1 (SOTA HBM4).
+diamond: $(COMMON_OBJS) $(RAM_OBJ)
 	@mkdir -p $(OUTDIR)
-	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) matrixMulti.cpp
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) $(RAM_OBJ) main/diamond.cpp $(RAMLINK)
 
-# matrixMultiBlock: link main source
-matrixMultiBlock: $(COMMON_OBJS)
+# accel_compare: DIAMOND vs TPU vs Trapezoid baselines on the shared PE mesh + same HBM.
+accel_compare: $(COMMON_OBJS) $(RAM_OBJ)
 	@mkdir -p $(OUTDIR)
-	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) matrixMultiBlock.cpp
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) $(RAM_OBJ) main/accel_compare.cpp $(RAMLINK)
 
-matrixMultiBlockDiagonal: $(COMMON_OBJS)
-	@mkdir -p $(OUTDIR)
-	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) matrixMultiBlockDiagonal.cpp
-
-# matrixMultiHam: link main source
-matrixMultiHam: $(COMMON_OBJS)
-	@mkdir -p $(OUTDIR)
-	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) matrixMultiplyHam.cpp
-
-# Rule to build .o files from src/
+# Shared src/ objects
 $(OBJSDIR)/%.o: src/%.cpp $(INCLUDES)
 	@mkdir -p $(OBJSDIR)
 	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
-# Clean rule
+# Ramulator adapter: C++20 + Ramulator headers, config path baked in
+$(RAM_OBJ): $(RAM_SRC) include/RamulatorHBM.h
+	@mkdir -p $(OBJSDIR)
+	$(CXX) $(RAMFLAGS) $(DEBUGFLAGS) -DRAMULATOR_HBM_CONFIG='"$(RAM_CONFIG)"' -c $< -o $@
+
 clean:
 	rm -rf $(OBJSDIR) $(OUTDIR)

@@ -2,19 +2,18 @@
 #include <cassert>
 #include <iostream>
 
-Grid::Grid(int rows, int cols, std::vector<DiagonalReduction*>& diagonal_reductions, std::vector<std::vector<int>> reduction_map, std::ostream& output_stream) : 
+Grid::Grid(int rows, int cols, std::vector<DiagonalReduction*>& diagonal_reductions, std::vector<std::vector<int>> reduction_map, std::ostream& output_stream, size_t fifo_depth) :
             rows(rows), cols(cols), out(output_stream), diagonalReductions(diagonal_reductions), reductionMap(reduction_map) {
     pes.resize(rows, std::vector<PE*>(cols, nullptr));
 
     for (int i = 0; i < rows; ++i)
         for (int j = 0; j < cols; ++j) {
-            pes[i][j] = new PE(i, j, out);
-            // if (i == rows - 1) {
-            //     pes[i][j]->setLastRow(true);  // Set last row flag for the last row PEs
-            // }
-            // if (j == cols - 1) {
-            //     pes[i][j]->setLastCol(true);  // Set last column flag for the last column PEs
-            // }
+            pes[i][j] = new PE(i, j, out, fifo_depth);
+            // Boundary PEs drain their pass-through operand instead of forwarding
+            // it to a non-existent neighbour (last col: no right PE; last row:
+            // bottom connects to a DiagonalReduction that only consumes psum).
+            if (i == rows - 1) pes[i][j]->setLastRow(true);
+            if (j == cols - 1) pes[i][j]->setLastCol(true);
         }
 
 
@@ -103,10 +102,10 @@ void Grid::setOutputConnections(std::vector<Connection*> output_connections) {
         pes[rows - 1][j]->setBottomConnection(output_connections[j]);
 }
 
-void Grid::cycle() {
+void Grid::cycle(uint64_t cycle) {
     for (int i = 0; i < rows; ++i){
         for (int j = 0; j < cols; ++j) {
-            pes[i][j]->cycle();
+            pes[i][j]->cycle(cycle);
         }
     }
 

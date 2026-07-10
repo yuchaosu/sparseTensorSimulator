@@ -1,12 +1,31 @@
+# ---- Build artifacts ----
 *.o
-*.png 
 *.exe
-*.txt
-with_h_data/supermarq/ghz/
-Wzh/outputs/
+objs/
+outputs/
+
+# ---- Generated data / results / plots / logs ----
 *.out
+*.err
 *.mpi
 *.pdf
+*.png
 *.npy
+*.swp
+*.log
+*.csv
+*.txt
+# ...but these tracked reproducibility artifacts are NOT generated output:
+!isca/hamlib_provenance.csv
+!isca/hamlib_provenance_families.csv
+
+# ---- Editor / cache ----
 .vscode/
-objs/
+__pycache__/
+
+# ---- Kept local, not synced ----
+# RTL working area; third-party trees: Ramulator 2.1 (build per RAMULATOR_SETUP.md)
+# and the STONNE / DiaBase / Flexagon (SST-STONNE) baselines (build per README).
+verilog/
+external/
+baselines/
