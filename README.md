@@ -1,4 +1,4 @@
-# sparseTensorSimulator — DIAMOND
+# DIAMOND
 
 Cycle-accurate simulator of a **systolic PE array** that computes **sparse
 diagonal SpMSpM** (`H^{k-1} · H`) to build the Taylor powers `H^1…H^K` of a
@@ -25,19 +25,24 @@ levers are modelled cycle-accurately:
 ## Build
 
 Needs a C++17 compiler (gcc-12+) and the Ramulator 2.1 shared lib (see
-`RAMULATOR_SETUP.md`).
+`RAMULATOR_SETUP.md`). Two binaries: **`diamond`** (the accelerator driver) and
+**`accel_compare`** (baseline comparison).
 
 ```bash
-make HBMHamiltonian accel_compare
+make diamond accel_compare
 # runtime libs (gcc-12 libstdc++ + Ramulator); required on nodes lacking the module:
 export LD_LIBRARY_PATH=/opt/ohpc/pub/compiler/gcc/12.4.0/lib64:$PWD/external/ramulator2:$LD_LIBRARY_PATH
 ```
 
 ## Run
 
+`diamond` runs the offset-space convolution (`convOnGrid`) — the sole dataflow;
+the old merge-join / Trapezoid / analytic paths were removed (baselines live in
+`accel_compare`, analytic models in `analytical/`).
+
 ```bash
-./outputs/HBMHamiltonian -row=8 -col=8 -folder=dia_families/ -file=qmaxcut_14_4.txt \
-    -qubit=14 -iter=4 -dataflow=convgrid -zeroskip=1 -cbalance=1 -verify=0 -csv=out.csv
+./outputs/diamond -row=8 -col=8 -folder=dia_families/ -file=qmaxcut_14_4.txt \
+    -qubit=14 -iter=4 -zeroskip=1 -cbalance=1 -verify=0 -csv=out.csv
 ```
 
 Key flags:
@@ -47,7 +52,6 @@ Key flags:
 | `-row -col` | mesh side S (PEs = S²; sweeps use 8×8 = 64) |
 | `-folder -file` | DIA workload (folder is relative to the HamLib root) |
 | `-qubit -iter` | qubits q (n = 2^q) and Taylor order K |
-| `-dataflow=convgrid` | cycle-accurate offset-space convolution (the headline path) |
 | `-zeroskip -cbalance` | the two ablation levers (0/1) |
 | `-hermitian` | stream only offsets ≥ 0 (H is Hermitian) → ~2× traffic/compute |
 | `-fused` | keep running Taylor sum on-chip (cuts per-power HBM round-trips) |
@@ -77,17 +81,17 @@ a measured per-component cycle/energy breakdown:
 
 | path | contents |
 |---|---|
-| `main/` | drivers: `HBMHamiltonian` (cycle-accurate), `accel_compare` |
-| `src/`, `include/` | PE mesh (`PE`, `Grid`, `Connection`, `Fifo`), reduction, Ramulator HBM |
-| `verilog/` | **cycle-accurate RTL** of the datapath for energy/area (see its README) |
-| `isca/` | sweep harnesses (local, not tracked) + `end_to_end_speedup.py`, provenance CSV |
-| `result/` | ready result CSVs (local, not tracked) |
+| `main/` | `diamond.cpp` (cycle-accurate, convgrid-only) + `accel_compare.cpp` |
+| `src/`, `include/` | PE mesh (`PE`, `Grid`, `Connection`, `Fifo`), reduction, Ramulator HBM adapter |
+| `isca/` | `end_to_end_speedup.py`, `hamlib_provenance.csv` (tracked); sweep harnesses (local) |
+| `tools/` | `resolve_hamlib_keys.py` (HamLib key resolver) |
 | `config/` | `hbm4_sota.yaml` (Ramulator HBM4) |
 | `docs/` | design notes |
 
-Analytic cost models, SLURM scripts, and third-party baselines are kept **local
-and un-tracked** (`.git/info/exclude`); the repo holds the design + cycle-accurate
-sources.
+Kept **local and un-tracked** (`.gitignore` / `.git/info/exclude`): `external/`
+(Ramulator, build per `RAMULATOR_SETUP.md`), `baselines/` (STONNE / DiaBase /
+Flexagon), `analytical/` (analytic cost models), `verilog/` (the energy/area RTL),
+`result/` (ready result CSVs), and the SLURM sweep scripts.
 
 ## Results
 
@@ -100,10 +104,9 @@ The three structural classes and their measured behaviour (q14, 8×8 PEs):
 - **fill-in** (bh, chem; D grows large): DIA is a poor fit (honest scope wall);
   **~20×** vs HS at q14, un-balanced L1 OOMs.
 
-TPU cannot reach q14–20 (OOM/timeout) — that is the crossover story.
-
-Ready CSVs live in `result/`: `ablation_q14.csv` (L1/L2/L3 ladder),
-`comparison_q14-20.csv` (DIAMOND-L3 vs TPU/HS), `end_to_end_speedup_q14.csv`.
+TPU cannot reach q14–20 (OOM/timeout) — that is the crossover story. Ready CSVs
+land in `result/`: `ablation_q14.csv` (L1/L2/L3 ladder), `comparison_q14-20.csv`
+(DIAMOND-L3 vs TPU/HS), `end_to_end_speedup_q14.csv`.
 
 ## End-to-end speedup (QuTiP)
 
@@ -120,15 +123,17 @@ faster than Trapezoid-HS**.
 
 ## Energy & area (RTL)
 
-`verilog/` is a synthesizable, faithful translation of the cycle-accurate datapath
-(PE = FIFOs + merge-join comparator + MAC; NoC links; offset-space reduction +
-cbalance gather tree). Each module maps to one energy component
+`verilog/` (local) is a synthesizable, faithful translation of the cycle-accurate
+datapath (PE = FIFOs + merge-join comparator + MAC; NoC links; offset-space
+reduction + cbalance gather tree). Each module maps to one energy component
 (MAC/BUF/ROUTER/ACCUM). Run `make sim` (Icarus, dumps VCD) / `make area` (Yosys);
 see `verilog/README.md`.
 
 ## Reproducibility
 
-- Workloads are HamLib Hamiltonians in DIA form; `isca/hamlib_provenance*.csv`
-  record the source HDF5 file + dataset key + fetch params for each.
+- Workloads are HamLib Hamiltonians in DIA form; `isca/hamlib_provenance.csv`
+  records the source HDF5 file + dataset key + fetch params for every family (10
+  variants: the 9 families + the synthetic `heis-synthetic`, distinct from the
+  HamLib `heis`). `tools/resolve_hamlib_keys.py` resolves placeholder keys.
 - Pin: `dt=0.0012`, `num_timesteps=1000`, Ramulator HBM4 (`config/hbm4_sota.yaml`),
   gcc-12, Ramulator 2.1. Cycles are reported at 1 GHz.
