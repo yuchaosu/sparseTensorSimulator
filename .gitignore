@@ -17,7 +17,6 @@ outputs/
 *.txt
 # ...but these tracked reproducibility artifacts are NOT generated output:
 !isca/hamlib_provenance.csv
-!isca/hamlib_provenance_families.csv
 
 # ---- Editor / cache ----
 .vscode/
