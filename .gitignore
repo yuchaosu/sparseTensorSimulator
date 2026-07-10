@@ -4,48 +4,28 @@
 objs/
 outputs/
 
-# Compiled executables (no extension) produced by the various Makefiles
-a.out
-Wzh/test_hbm
-Wzh/test/rwtest
-Wzh/test/hbm_diag_test
-Wzh/hbm/hbm_example
-Wzh/hbm/debug
-
-# ---- Generated data / results / plots ----
+# ---- Generated data / results / plots / logs ----
 *.out
+*.err
 *.mpi
 *.pdf
 *.png
 *.npy
 *.swp
-*.err
-*.csv
-# ...but the HamLib provenance CSV is a tracked reproducibility artifact, not generated output.
-!isca/hamlib_provenance.csv
-
-# Large generated Hamiltonian / feature dumps
-*.txt
-
-# ---- Editor / env ----
-.vscode/
-
-# ---- Project-specific data dirs ----
-with_h_data/supermarq/ghz/
-external/
-
-# ---- Baseline third-party simulators (STONNE, DiaBase, Flexagon/SST-STONNE) ----
-# Large upstream repos kept locally for comparison; not vendored into this repo.
-baselines/
-
-# generated sweep outputs
-isca/manifest.txt
-isca/sweep_results.csv
-isca/sweep_rows/
-isca/dia_manifest.txt
-isca/dia_results.csv
-isca/dia_rows/
-
-# Python cache / logs
-__pycache__/
 *.log
+*.csv
+*.txt
+# ...but these tracked reproducibility artifacts are NOT generated output:
+!isca/hamlib_provenance.csv
+!isca/hamlib_provenance_families.csv
+
+# ---- Editor / cache ----
+.vscode/
+__pycache__/
+
+# ---- Kept local, not synced ----
+# RTL working area; third-party trees: Ramulator 2.1 (build per RAMULATOR_SETUP.md)
+# and the STONNE / DiaBase / Flexagon (SST-STONNE) baselines (build per README).
+verilog/
+external/
+baselines/

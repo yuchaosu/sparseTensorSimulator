@@ -436,7 +436,7 @@ inline void chargeTraffic(long long bA, long long bB, long long bC,
 }
 
 struct DiamondAccel : Accelerator {
-    const char* name() const override { return "DIAMOND (diagonal, ours)"; }
+    const char* name() const override { return "DIAMOND (diagonal-ours)"; }
     ConvDiag matmul(const ConvDiag& A, const ConvDiag& B, int n, int S, long long& cyc,
                     long long&, long long&, long long&, long long& hbm, long long& peak,
                     long long& spill, AccelHBM& mem) override {
