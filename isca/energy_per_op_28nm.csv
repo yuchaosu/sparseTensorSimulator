@@ -41,3 +41,50 @@ reduction_tree,ACCUM_TREE_8IN,2.792,0.471,3.263,1.87,7039.83
 # --- array-level, real hierarchical synthesis (16x16 = 256 PEs, clock-gated) ---
 # design,area_um2,area_mm2,per_PE_um2,dynamic_mW,leakage_mW,total_mW,slack_ns
 grid_tile_S16,ARRAY_16x16,1541659.08,1.542,5125.40,66.461,25.5,92.007,-0.31
+#
+# =====================================================================
+# FEED SCRATCHPAD (SRAM) -- from the temn28hpcphssrammacros .lib files
+# =====================================================================
+# These are REAL compiled TSMC macros (area + per-access energy read straight
+# from Liberty), not estimates. Liberty energy unit = capacitive_load_unit *
+# voltage_unit^2 = 1 pF * 1 V^2 = 1 pJ.
+#
+# CAVEAT 1: macro data is at tt0p9v25c (TYPICAL); the logic numbers above are at
+#           ssg0p81v125c (SLOW). Do not mix without stating it.
+# CAVEAT 2: hssram macros are HIGH-SPEED (LVT), not high-density. The UHD
+#           single-port compiler (uhdspsram) would be ~2-3x better in both area
+#           and energy, but it needs MC2 tools + a TSMC memory-compiler license
+#           that are not available here. Treat the numbers below as an UPPER BOUND.
+#
+# macro,words,bits_per_word,total_bits,area_um2,um2_per_bit,read_pJ,write_pJ
+TEM5N28HPCPLVTA64X64M4SWBSO,64,64,4096,6135.7,1.4980,,
+TEM5N28HPCPLVTA128X64M4SWBSO,128,64,8192,7013.0,0.8561,,
+TEM5N28HPCPLVTA256X64M4SWBSO,256,64,16384,8767.8,0.5351,,
+TEM5N28HPCPLVTA512X32M4SWBSO,512,32,16384,7748.8,0.4729,,
+TEM5N28HPCPLVTA1024X32M8SWBSO,1024,32,32768,14024.1,0.4280,,
+TEM5N28HPCPLVTA2048X32M8SWBSO,2048,32,65536,24536.5,0.3744,6.035,4.802
+TEM5N28HPCPLVTA2048X36M8SWBSO,2048,36,73728,27281.3,0.3700,,
+TEM5N28HPCPLVTA2048X40M8SWBSO,2048,40,81920,30026.1,0.3665,,
+#
+# --- E_SPAD: a term currently MISSING from include/Accelerators.h ---
+# The model charges HBM (E_MEM=200) then the PE FIFO (E_BUF=1), but never
+# charges the on-chip feed scratchpad in between. Every operand entering the
+# array is written once (fill from HBM) and read once (feed to the mesh).
+# A 64-bit DataPackage spans 2x 2048x32 macros in parallel:
+#
+# operation,pJ_per_op,relative_to_MAC,note
+SPAD_READ_64b,12.070,8.08,2x 6.035 pJ -- feed one operand into the array
+SPAD_WRITE_64b,9.604,6.43,2x 4.802 pJ -- fill from HBM
+#
+# => A single operand fetch costs ~8 MACs of energy. This is the largest
+#    on-chip term and argues directly for maximising on-chip reuse (DIAMOND's
+#    offset-space convolution streams one fetch through the whole mesh).
+#
+# --- 2 MB feed scratchpad projection (model kScratchpadBytes) ---
+# 2 MB = 16,777,216 bits = 256x the 2048x32 macro.
+# structure,capacity_bits,macros,um2_per_bit,area_um2,area_mm2
+feed_scratchpad_2MB,16777216,256,0.3744,6281344,6.281
+#
+# => 6.28 mm^2 -- about 4x the entire 16x16 PE array (1.54 mm^2). On this
+#    design memory dominates area, not compute. A UHD-macro build would be
+#    ~2-3x smaller.
