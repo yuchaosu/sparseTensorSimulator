@@ -1,0 +1,43 @@
+# DIAMOND per-operation energy -- MEASURED by synthesis, not modelled.
+#
+# Purpose: replaces the placeholder relative weights in include/Accelerators.h:224
+#   const double E_MAC=1, E_BUF=1, E_ROUTER=2, E_ACCUM=1, E_MEM=200;
+# with per-op energies grounded in a real standard-cell flow.
+#
+# Process : TSMC 28HPC+ (tcbn28hpcplus), 7-track bwp7t40p140, multi-Vt, HVT-first
+# Corner  : ssg0p81v125c (SS, 0.81 V, 125 C)
+# Tool    : Synopsys Design Compiler T-2022.03-SP2
+#           DesignWare DW_fp_mult / DW_fp_add (sig_width=23, exp_width=8, IEEE)
+# Datapath: fp32; DataPackage packed as 32b value + 2x16b index = 64 bit
+# Buffers : sync_fifo depth 8, 3 per PE (receivedA, receivedB, PsumOut)
+# Clock   : 700 MHz. pJ_per_op_dynamic = dynamic_mW / 0.7
+#           pJ_per_cycle_leakage       = leakage_uW / 700
+#
+# Caveats:
+#  1. Dynamic power uses DC report_power DEFAULT switching activity (no SAIF).
+#     The relative ranking is reliable; absolute pJ needs a SAIF-annotated
+#     VCS -> PrimeTime PX run against a real workload.
+#  2. Timing is not closed at 700 MHz: the single-stage fp32 MAC path is
+#     ~1.74 ns -> measured Fmax ~575 MHz. A 2-stage MAC closes 700 MHz.
+#  3. E_MEM (off-chip HBM) is NOT measured here -- it stays a model parameter.
+#  4. reduction_tree is the whole 8-input tree (7 adders); per-adder ~0.399 pJ.
+#
+component,energy_component,pJ_per_op_dynamic,pJ_per_cycle_leakage,pJ_per_op_total,relative_to_MAC,area_um2
+mac_unit,MAC,1.494,0.150,1.644,1.00,2121.60
+sync_fifo,BUF,1.355,0.007,1.361,0.91,1370.53
+merge_join,COMPARE,0.008,0.000,0.008,0.005,33.22
+connection_link,ROUTER,0.607,0.002,0.610,0.41,500.19
+fp_accum,ACCUM,2.508,0.426,2.934,1.68,4257.02
+reduction_tree,ACCUM_TREE_8IN,2.792,0.471,3.263,1.87,7039.83
+#
+# --- suggested model update (include/Accelerators.h) ---
+# Measured relative weights (MAC = 1):
+#   E_MAC    = 1.00   (was 1)   -- unchanged
+#   E_BUF    = 0.91   (was 1)   -- confirmed: the right-sized FIFO really is ~MAC
+#   E_ROUTER = 0.41   (was 2)   -- the placeholder overweighted routing ~5x
+#   E_ACCUM  = 1.68   (was 1)   -- the placeholder underweighted accumulation ~1.7x
+# Absolute (pJ/op): MAC 1.494, BUF 1.355, ROUTER 0.607, ACCUM 2.508
+#
+# --- array-level, real hierarchical synthesis (16x16 = 256 PEs, clock-gated) ---
+# design,area_um2,area_mm2,per_PE_um2,dynamic_mW,leakage_mW,total_mW,slack_ns
+grid_tile_S16,ARRAY_16x16,1541659.08,1.542,5125.40,66.461,25.5,92.007,-0.31
