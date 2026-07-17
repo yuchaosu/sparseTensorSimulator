@@ -32,6 +32,13 @@ diamond: $(COMMON_OBJS) $(RAM_OBJ)
 	@mkdir -p $(OUTDIR)
 	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) $(RAM_OBJ) main/diamond.cpp $(RAMLINK)
 
+# conv_breakdown: STANDALONE per-part cycle breakdown of the offset-space convolution
+# (compute vs cbalance NoC/reduce gather vs fill/drain), to show how much of the gather
+# routing OVERLAPS compute. Cycle domain only -> no Ramulator/HBM, links against PE alone.
+conv_breakdown: $(COMMON_OBJS)
+	@mkdir -p $(OUTDIR)
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) -o $(OUTDIR)/$@ $(COMMON_OBJS) main/conv_breakdown.cpp
+
 # accel_compare: DIAMOND vs TPU vs Trapezoid baselines on the shared PE mesh + same HBM.
 accel_compare: $(COMMON_OBJS) $(RAM_OBJ)
 	@mkdir -p $(OUTDIR)
