@@ -31,9 +31,13 @@ PORTAL = "https://portal.nersc.gov/cfs/m888/dcamps/hamlib"
 PORTAL_DIR = {
     "tfim": "condensedmatter/tfim",       "heis": "condensedmatter/heisenberg",
     "fermi": "condensedmatter/fermihubbard", "bh": "condensedmatter/bosehubbard",
-    "maxcut": "binaryoptimization/maxcut", "qmaxcut": "binaryoptimization/qmaxcut",
+    "maxcut": "binaryoptimization/maxcut",
     "reg3": "binaryoptimization/maxcut",  "tsp": "discreteoptimization/tsp",
 }
+# NOTE: PORTAL_DIR is only a fallback -- the provenance `portal_path` column is the source
+# of truth and overrides it for every family that has one. qmaxcut/chem/Li2/O2 have no
+# portal_path (locally assembled) and are intentionally NOT here, so --download reports a
+# clean "fetch manually" error for them instead of chasing a guessed (404) URL.
 
 
 # ---- HamLib Pauli-string reader (from helper/fetchham.py, self-contained) ----
@@ -60,17 +64,27 @@ def read_sparse_pauli(fname_hdf5, key):
 
 def resolve_hdf5(row, ham, download):
     """Return a local path to the row's hdf5: search --ham first; else download the
-    family zip from the portal and unzip. Raises if unresolved (never guesses a URL)."""
-    fname = row["hdf5_file"]
+    family zip from the portal and unzip. Raises if unresolved (never guesses a URL).
+
+    The download subdir comes from the provenance `portal_path` column (the source of
+    truth), falling back to PORTAL_DIR only if that column is blank. `hdf5_file` may be a
+    bare name or a legacy absolute path -- we always key on its basename."""
+    fname = os.path.basename(row["hdf5_file"])              # tolerate legacy /mnt/.../x.hdf5
     hits = glob.glob(os.path.join(ham, "**", fname), recursive=True)
     if hits:
         return hits[0]
     if not download:
         raise FileNotFoundError(f"{fname} not found under {ham} (use --download to fetch)")
     fam = row["family"]
-    sub = PORTAL_DIR.get(fam)
+    sub = (row.get("portal_path") or "").strip()
+    if sub.startswith("/") or sub.startswith("http"):       # not a portal-relative subdir
+        sub = ""
     if not sub:
-        raise FileNotFoundError(f"no confirmed portal path for family '{fam}' — fetch {fname} manually")
+        sub = PORTAL_DIR.get(fam, "")
+    if not sub:
+        raise FileNotFoundError(
+            f"no portal_path in provenance for family '{fam}' (hdf5 {fname}) — this source "
+            f"was locally assembled; fetch it manually or add its portal_path to the CSV")
     base = fname[:-5] if fname.endswith(".hdf5") else fname  # <name>.hdf5 -> <name>
     url = f"{PORTAL}/{sub}/{base}.zip"
     dest_dir = os.path.join(ham, base)

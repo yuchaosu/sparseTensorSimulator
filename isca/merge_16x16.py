@@ -54,6 +54,21 @@ def dedup_prefer_ok(rows):
     return list(best.values())
 
 
+def dedup_prefer_ok_flex(rows):
+    """One row per (impl,workload,q,K) for the 11-col flex schema (status=col9). The
+    turin128 fat-node reruns write extra flex_t128_*.csv rows for q14 cells that timed
+    out; keep OK over any non-OK so a recovered cell replaces its stale TIMEOUT row."""
+    best = {}
+    for r in rows:
+        if len(r) < 10:
+            continue
+        key = (r[0], r[1], r[2], r[3])   # impl, workload, q, K
+        cur = best.get(key)
+        if cur is None or (r[9] == "OK" and cur[9] != "OK"):
+            best[key] = r
+    return list(best.values())
+
+
 def write_csv(path, header, rows):
     with open(path, "w") as w:
         w.write(header + "\n")
@@ -82,7 +97,8 @@ def main():
               "dataflow,workload,q,K,class,pe,cycles,status,sec",
               [[r[1]] + r[2:10] for r in trp])
     # Flexagon: impl,workload,q,K,class,pe,cycles_total,per_step_cycles,per_step_nnz,status,sec
-    flex = read_rows("flex_*.csv", wl_col=1)   # impl,workload,...
+    flex = read_rows("flex_*.csv", wl_col=1)   # impl,workload,... (incl. flex_t128_* reruns)
+    flex = dedup_prefer_ok_flex(flex)          # collapse q14 TIMEOUT->OK reruns, prefer OK
     write_csv(f"{OUT}/data_16x16_flexagon.csv",
               "impl,workload,q,K,class,pe,cycles_total,per_step_cycles,per_step_nnz,status,sec",
               flex)
