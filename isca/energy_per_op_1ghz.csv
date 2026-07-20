@@ -1,0 +1,11 @@
+"# DIAMOND per-operation energy (measured). TSMC28HPC+ 7T-HVT ssg0p81v125c, fp32, 1 GHz (PIPE=2 pipelined MAC)."
+# pJ_28nm = dynamic_power_mW * 1ns.  16nm via DeepScaleTool 28->16 (energy x0.47).  MEM = CACTI 2MB scratchpad (32nm/lstp/400K).
+component,role,model_weight,pJ_per_op_28nm,pJ_per_op_16nm,norm_to_MAC
+mac_unit,MAC (fp32 multiply),E_MAC,2.127,1.0,1.0
+sync_fifo,BUF (FIFO push/pop),E_BUF,0.697,0.328,0.328
+merge_join,Comparator (3-way),(cmp),0.005,0.003,0.003
+connection_link,ROUTER (NoC hop),E_ROUTER,0.608,0.286,0.286
+fp_accum,ACCUM (accumulate node),E_ACCUM,2.58,1.213,1.213
+reduction_tree,ACCUM tree (8-in),(tree),4.188,1.968,1.969
+scratchpad_2MB_line,MEM read /64B line,E_MEM,409.9,192.6,192.7
+scratchpad_2MB_word,MEM read /fp32 word,E_MEM_w,25.62,12.04,12.05

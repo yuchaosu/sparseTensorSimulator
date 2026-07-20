@@ -18,6 +18,8 @@ outputs/
 # ...but these tracked reproducibility artifacts are NOT generated output:
 !isca/hamlib_provenance.csv
 !isca/energy_per_op_28nm.csv
+!isca/energy_per_op_1ghz.csv
+!isca/ppa_16x16.csv
 
 # ---- Editor / cache ----
 .vscode/
