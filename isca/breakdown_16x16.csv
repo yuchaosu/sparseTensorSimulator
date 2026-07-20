@@ -1,0 +1,35 @@
+"# Per-component AREA breakdown, 16x16 = 256 fp32 MAC. TSMC28HPC+ 7T-HVT ssg0p81v125c, 1GHz."
+# DIAMOND = in-context grid leaf sums. Trapezoid/Flexagon = 16 units (W=16/MS_SIZE=16). TPU/SegFold = per-PE x256. Mem = CACTI 2MB (32nm).
+design,component,category,count,unit_um2,total_um2,total_mm2,pct_compute
+DIAMOND,mac_unit,MAC/multiply,256,2687.8,688089,0.6881,49.5
+DIAMOND,sync_fifo (x3/PE),Buffer/FIFO,768,574.0,440796,0.4408,31.7
+DIAMOND,merge_join,Match/compare,256,37.2,9533,0.0095,0.7
+DIAMOND,reduction_tree(256),Reduce/accum,1,223478,223478,0.2235,16.1
+DIAMOND,grid glue,misc,1,5367,5367,0.0054,0.4
+DIAMOND,diamond_mem_ctrl,Mem ctrl,1,23947.5,23947,0.0239,1.7
+DIAMOND,COMPUTE SUBTOTAL,,,,1391210,1.3912,100.0
+DIAMOND,2MB scratchpad (CACTI),On-chip 2MB,1,4734238,4734238,4.7342,
+DIAMOND,SYSTEM TOTAL,,,,6125449,6.1254,
+TPU,tpu_pe (mult+accum),MAC+accum,256,6600.7,1689777,1.6898,100.0
+TPU,COMPUTE SUBTOTAL,,,,1689777,1.6898,100.0
+TPU,2MB cache (CACTI),On-chip 2MB,1,4933753,4933753,4.9338,
+TPU,SYSTEM TOTAL,,,,6623530,6.6235,
+Trapezoid,intersect_unit,Match/intersect,16,28.1,450,0.0005,0.0
+Trapezoid,mult+accum+glue,MAC/multiply,16,39061.7,624988,0.625,66.7
+Trapezoid,fp_redtree(16),Reduce/accum,16,19472.0,311552,0.3116,33.3
+Trapezoid,COMPUTE SUBTOTAL,,,,936990,0.937,100.0
+Trapezoid,2MB cache (CACTI),On-chip 2MB,1,4933753,4933753,4.9338,
+Trapezoid,SYSTEM TOTAL,,,,5870743,5.8707,
+Flexagon,ms_switch (x16/tile),MAC/multiply,16,37316.8,597069,0.5971,63.8
+Flexagon,fe_network(16),Reduce/accum,16,21187.8,339005,0.339,36.2
+Flexagon,COMPUTE SUBTOTAL,,,,936074,0.9361,100.0
+Flexagon,2MB cache (CACTI),On-chip 2MB,1,4933753,4933753,4.9338,
+Flexagon,SYSTEM TOTAL,,,,5869827,5.8698,
+SegFold,segfold_pe (MAC+CAM acc),MAC+accum,256,3357.0,859389,0.8594,50.2
+SegFold,segfold_switch,Interconnect,256,300.8,76995,0.077,4.5
+SegFold,segfold_sync_fifo,Buffer/FIFO,256,2714.7,694963,0.695,40.6
+SegFold,segfold_spad (CAM),Local SPAD,1,69371.5,69371,0.0694,4.0
+SegFold,segfold_mem_ctrl,Mem ctrl,1,12396.9,12397,0.0124,0.7
+SegFold,COMPUTE SUBTOTAL,,,,1713116,1.7131,100.0
+SegFold,2MB cache (CACTI),On-chip 2MB,1,4933753,4933753,4.9338,
+SegFold,SYSTEM TOTAL,,,,6646869,6.6469,

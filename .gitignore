@@ -20,6 +20,7 @@ outputs/
 !isca/energy_per_op_28nm.csv
 !isca/energy_per_op_1ghz.csv
 !isca/ppa_16x16.csv
+!isca/breakdown_16x16.csv
 
 # ---- Editor / cache ----
 .vscode/

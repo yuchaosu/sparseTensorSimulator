@@ -1,8 +1,9 @@
 "# 16x16 (256 fp32 MAC) system PPA. Logic: DC TSMC28HPC+ 7T-HVT ssg0p81v125c @1GHz. Mem: 2MB CACTI (DIAMOND=scratchpad, baselines=cache), 32nm lstp 400K."
-"# 16nm columns: DeepScaleTool 28->16 (area x0.40, power x0.47) applied uniformly. mem_rd is pJ per 64B line."
-design,logic_mm2_28,logic_leak_mW_28,logic_dyn_mW_28,mem_mm2_28,mem_leak_mW_28,mem_rd_pJ_28,TOTAL_mm2_28,TOTAL_leak_mW_28,TOTAL_mm2_16,TOTAL_leak_mW_16,logic_dyn_mW_16,mem_rd_pJ_16
-DIAMOND,1.391,54.57,117.8,4.734,1.892,409.9,6.125,56.46,2.45,26.54,55.4,192.6
-TPU,1.69,151.78,585.9,4.933,2.015,441.7,6.623,153.79,2.649,72.28,275.4,207.6
-Trapezoid,0.117,7.23,68.2,4.933,2.015,441.7,5.05,9.25,2.02,4.35,32.1,207.6
-Flexagon,0.117,6.92,37.2,4.933,2.015,441.7,5.05,8.94,2.02,4.2,17.5,207.6
-SegFold,1.713,41.51,433.0,4.933,2.015,441.7,6.646,43.52,2.659,20.46,203.5,207.6
+"# Unit counts to reach 256 MAC: DIAMOND=full 256-PE grid; TPU/SegFold=256x per-PE; Trapezoid/Flexagon=16x (W=16/MS_SIZE=16, 16 MAC each)."
+"# 16nm via DeepScaleTool 28->16 (area x0.40, power x0.47). mem_rd = pJ per 64B line."
+design,TOTAL_mm2_28,TOTAL_leak_mW_28,TOTAL_dyn_mW_28,mem_rd_pJ_28,TOTAL_mm2_16,TOTAL_leak_mW_16,TOTAL_dyn_mW_16,mem_rd_pJ_16
+DIAMOND,6.125,56.46,117.8,409.9,2.45,26.54,55.3,192.7
+TPU,6.624,153.79,585.9,441.7,2.65,72.28,275.4,207.6
+Trapezoid,5.871,59.87,545.4,441.7,2.348,28.14,256.3,207.6
+Flexagon,5.87,57.34,298.0,441.7,2.348,26.95,140.1,207.6
+SegFold,6.647,43.52,433.0,441.7,2.659,20.46,203.5,207.6
