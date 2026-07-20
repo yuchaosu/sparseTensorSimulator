@@ -1,35 +1,24 @@
-"# Per-component AREA breakdown, 16x16 = 256 fp32 MAC. TSMC28HPC+ 7T-HVT ssg0p81v125c, 1GHz."
-# DIAMOND = in-context grid leaf sums. Trapezoid/Flexagon = 16 units (W=16/MS_SIZE=16). TPU/SegFold = per-PE x256. Mem = CACTI 2MB (32nm).
-design,component,category,count,unit_um2,total_um2,total_mm2,pct_compute
-DIAMOND,mac_unit,MAC/multiply,256,2687.8,688089,0.6881,49.5
-DIAMOND,sync_fifo (x3/PE),Buffer/FIFO,768,574.0,440796,0.4408,31.7
-DIAMOND,merge_join,Match/compare,256,37.2,9533,0.0095,0.7
-DIAMOND,reduction_tree(256),Reduce/accum,1,223478,223478,0.2235,16.1
-DIAMOND,grid glue,misc,1,5367,5367,0.0054,0.4
-DIAMOND,diamond_mem_ctrl,Mem ctrl,1,23947.5,23947,0.0239,1.7
-DIAMOND,COMPUTE SUBTOTAL,,,,1391210,1.3912,100.0
-DIAMOND,2MB scratchpad (CACTI),On-chip 2MB,1,4734238,4734238,4.7342,
-DIAMOND,SYSTEM TOTAL,,,,6125449,6.1254,
-TPU,tpu_pe (mult+accum),MAC+accum,256,6600.7,1689777,1.6898,100.0
-TPU,COMPUTE SUBTOTAL,,,,1689777,1.6898,100.0
-TPU,2MB cache (CACTI),On-chip 2MB,1,4933753,4933753,4.9338,
-TPU,SYSTEM TOTAL,,,,6623530,6.6235,
-Trapezoid,intersect_unit,Match/intersect,16,28.1,450,0.0005,0.0
-Trapezoid,mult+accum+glue,MAC/multiply,16,39061.7,624988,0.625,66.7
-Trapezoid,fp_redtree(16),Reduce/accum,16,19472.0,311552,0.3116,33.3
-Trapezoid,COMPUTE SUBTOTAL,,,,936990,0.937,100.0
-Trapezoid,2MB cache (CACTI),On-chip 2MB,1,4933753,4933753,4.9338,
-Trapezoid,SYSTEM TOTAL,,,,5870743,5.8707,
-Flexagon,ms_switch (x16/tile),MAC/multiply,16,37316.8,597069,0.5971,63.8
-Flexagon,fe_network(16),Reduce/accum,16,21187.8,339005,0.339,36.2
-Flexagon,COMPUTE SUBTOTAL,,,,936074,0.9361,100.0
-Flexagon,2MB cache (CACTI),On-chip 2MB,1,4933753,4933753,4.9338,
-Flexagon,SYSTEM TOTAL,,,,5869827,5.8698,
-SegFold,segfold_pe (MAC+CAM acc),MAC+accum,256,3357.0,859389,0.8594,50.2
-SegFold,segfold_switch,Interconnect,256,300.8,76995,0.077,4.5
-SegFold,segfold_sync_fifo,Buffer/FIFO,256,2714.7,694963,0.695,40.6
-SegFold,segfold_spad (CAM),Local SPAD,1,69371.5,69371,0.0694,4.0
-SegFold,segfold_mem_ctrl,Mem ctrl,1,12396.9,12397,0.0124,0.7
-SegFold,COMPUTE SUBTOTAL,,,,1713116,1.7131,100.0
-SegFold,2MB cache (CACTI),On-chip 2MB,1,4933753,4933753,4.9338,
-SegFold,SYSTEM TOTAL,,,,6646869,6.6469,
+"# Per-component COMPUTE-ONLY area breakdown (2MB cache excluded), 16x16 = 256 fp32 MAC, TSMC28 7T-HVT."
+"# Components scaled by cal_x to calibrated compute area: DIAMOND x2.19, Trapezoid/Flexagon x3.6, SegFold x1.81, TPU x1.0."
+design,component,category,count,unit_um2_scaled,total_um2,total_mm2,cal_x
+DIAMOND,mac_unit,MAC,256,5874.2,1503803,1.5038,2.19
+DIAMOND,sync_fifo (x3/PE),Buffer,768,1254.4,963350,0.9633,2.19
+DIAMOND,reduction_tree(256),Reduce,1,488406.3,488406,0.4884,2.19
+DIAMOND,merge_join,Match,256,81.4,20834,0.0208,2.19
+DIAMOND,mem_ctrl + glue,Ctrl,1,64065.1,64065,0.0641,2.19
+DIAMOND,COMPUTE TOTAL,,,,3040459,3.0405,2.19
+TPU,tpu_pe (mult+fp32 add+regs),MAC+accum,256,6600.7,1689777,1.6898,1.0
+TPU,COMPUTE TOTAL,,,,1689777,1.6898,1.0
+Trapezoid,mult+accum+glue,MAC,16,140895.6,2254330,2.2543,3.61
+Trapezoid,fp_redtree(16),Reduce,16,70235.5,1123769,1.1238,3.61
+Trapezoid,intersect_unit,Match,16,101.5,1623,0.0016,3.61
+Trapezoid,COMPUTE TOTAL,,,,3379722,3.3797,3.61
+Flexagon,ms_switch,MAC,256,8421.9,2156017,2.156,3.61
+Flexagon,fe_network(16),Reduce,16,76509.1,1224146,1.2241,3.61
+Flexagon,COMPUTE TOTAL,,,,3380164,3.3802,3.61
+SegFold,segfold_pe (MAC+CAM acc),MAC+accum,256,6075.1,1555229,1.5552,1.81
+SegFold,segfold_sync_fifo,Buffer,256,4912.8,1257668,1.2577,1.81
+SegFold,segfold_switch,Interconnect,256,544.3,139336,0.1393,1.81
+SegFold,segfold_spad (CAM),SPAD,1,125540.9,125541,0.1255,1.81
+SegFold,segfold_mem_ctrl,Ctrl,1,22434.6,22435,0.0224,1.81
+SegFold,COMPUTE TOTAL,,,,3100209,3.1002,1.81
